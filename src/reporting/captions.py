@@ -8,10 +8,41 @@ from typing import Mapping
 
 import yaml
 
+DIGIT_NAMES = {
+    "0": "Zero",
+    "1": "One",
+    "2": "Two",
+    "3": "Three",
+    "4": "Four",
+    "5": "Five",
+    "6": "Six",
+    "7": "Seven",
+    "8": "Eight",
+    "9": "Nine",
+}
+LATEX_ESCAPES = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
+def _escape_latex(value: str) -> str:
+    return "".join(LATEX_ESCAPES.get(character, character) for character in value)
+
 
 def caption_macro_name(artifact_id: str) -> str:
     """Convert an artifact ID to its generated caption macro name."""
-    return "".join(part.capitalize() for part in artifact_id.split("_")) + "Caption"
+    name = "".join(part.capitalize() for part in artifact_id.split("_"))
+    name = re.sub(r"\d", lambda match: DIGIT_NAMES[match.group()], name)
+    return name + "Caption"
 
 
 def write_caption_macros(
@@ -45,7 +76,7 @@ def write_caption_macros(
             f"{title}. Sample: {sample_text}. {notes}. "
             f"Data vintage: {data_vintage}. Source: {source}. {takeaway}"
         )
-        caption = re.sub(r"\s+", " ", caption).replace("%", r"\%").replace("_", r"\_")
+        caption = _escape_latex(re.sub(r"\s+", " ", caption))
         lines.append(rf"\newcommand{{\{caption_macro_name(artifact_id)}}}{{{caption}}}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

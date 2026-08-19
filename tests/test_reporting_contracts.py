@@ -10,7 +10,7 @@ import pytest
 from src.analysis.table_r1 import PASS_REVISED_VINTAGE, PASS_STRICT
 from src.reporting.artifacts import write_artifact_manifest
 from src.reporting.audit import write_replication_status
-from src.reporting.captions import write_caption_macros
+from src.reporting.captions import caption_macro_name, write_caption_macros
 from src.reporting.latex import compile_latex_report
 from src.reporting.metadata import write_report_metadata
 
@@ -50,7 +50,7 @@ def test_report_metadata_writes_schema_valid_json_and_tex(tmp_path: Path):
 def test_caption_generation_requires_dates_and_calculated_takeaway(tmp_path: Path):
     captions = tmp_path / "captions.yml"
     captions.write_text(
-        "table_test:\n  title: Test table\n  label: tab:test\n  takeaway: Calculated result\n",
+        "table_test:\n  title: S&P test table\n  label: tab:test\n  takeaway: sample_mean changed 5%\n",
         encoding="utf-8",
     )
     output = tmp_path / "generated_captions.tex"
@@ -66,7 +66,20 @@ def test_caption_generation_requires_dates_and_calculated_takeaway(tmp_path: Pat
     text = output.read_text(encoding="utf-8")
     assert "1952Q4--1998Q3" in text
     assert "Data vintage: 2026-08-18" in text
-    assert "Calculated result" in text
+    assert r"S\&P test table" in text
+    assert r"sample\_mean changed 5\%" in text
+
+
+@pytest.mark.parametrize(
+    ("artifact_id", "expected"),
+    [
+        ("figure_1_replication", "FigureOneReplicationCaption"),
+        ("table_s1_core_data_summary", "TableSOneCoreDataSummaryCaption"),
+        ("table_r1_replication_audit", "TableROneReplicationAuditCaption"),
+    ],
+)
+def test_caption_macro_names_use_only_control_word_letters(artifact_id, expected):
+    assert caption_macro_name(artifact_id) == expected
 
 
 def test_replication_status_uses_worst_check(tmp_path: Path):
@@ -119,10 +132,39 @@ def test_artifact_manifest_hashes_dependencies_and_rejects_stale(tmp_path: Path)
         os.utime(dependency, (1, 1))
 
 
-def test_missing_latexmk_writes_actionable_log(tmp_path: Path, monkeypatch):
+def test_missing_latex_compiler_writes_actionable_log(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("src.reporting.latex.shutil.which", lambda _: None)
 
-    with pytest.raises(RuntimeError, match="Install a TeX distribution"):
+    with pytest.raises(RuntimeError, match="latexmk or install Tectonic"):
         compile_latex_report(tmp_path)
 
     assert (tmp_path / "build" / "latex_build.log").exists()
+
+
+def test_compile_report_falls_back_to_tectonic(tmp_path: Path, monkeypatch):
+    paper_dir = tmp_path / "paper"
+    paper_dir.mkdir()
+    calls = []
+    monkeypatch.setattr(
+        "src.reporting.latex.shutil.which",
+        lambda name: "/bin/tectonic" if name == "tectonic" else None,
+    )
+    monkeypatch.setattr(
+        "src.reporting.latex.subprocess.run",
+        lambda command, **kwargs: calls.append((command, kwargs))
+        or type("Result", (), {"stdout": "built", "stderr": "", "returncode": 0})(),
+    )
+
+    result = compile_latex_report(tmp_path)
+
+    command, kwargs = calls[0]
+    assert command == [
+        "/bin/tectonic",
+        "--keep-logs",
+        "--print",
+        "--outdir",
+        str((tmp_path / "build").resolve()),
+        "main.tex",
+    ]
+    assert kwargs["cwd"] == paper_dir
+    assert result == tmp_path / "build" / "main.pdf"

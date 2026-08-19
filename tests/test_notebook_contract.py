@@ -17,8 +17,9 @@ def test_notebook_alternates_cells_and_executes_from_generated_artifacts(
     tmp_path: Path,
 ):
     notebook = nbformat.read(NOTEBOOK_PATH, as_version=4)
-    assert len(notebook.cells) == 12
-    assert [cell.cell_type for cell in notebook.cells] == ["markdown", "code"] * 6
+    cells = [cell for cell in notebook.cells if cell.source.strip()]
+    assert len(cells) == 12
+    assert [cell.cell_type for cell in cells] == ["markdown", "code"] * 6
 
     reports_dir = tmp_path / "reports"
     (reports_dir / "tables").mkdir(parents=True)
@@ -31,7 +32,6 @@ def test_notebook_alternates_cells_and_executes_from_generated_artifacts(
             "c": values,
             "a": 1.2 * values,
             "y": 0.8 * values,
-            "cay": np.sin(values),
             "sp_excess_return": np.cos(values),
             "crsp_vw_excess_return": np.cos(values) + 0.01,
         },
@@ -40,6 +40,9 @@ def test_notebook_alternates_cells_and_executes_from_generated_artifacts(
     processed_dir = tmp_path / "_data" / "processed"
     processed_dir.mkdir(parents=True)
     panel.to_parquet(processed_dir / "core_quarterly.parquet")
+    pd.DataFrame(
+        {"cay_current_vintage": np.sin(values)}, index=index
+    ).to_csv(reports_dir / "build" / "current_vintage_cay_comparison.csv")
     pd.DataFrame({"metric": ["fixture"], "status": ["PASS_STRICT"]}).to_csv(
         reports_dir / "tables" / "table_r1_replication_audit.csv", index=False
     )
@@ -58,7 +61,7 @@ def test_notebook_alternates_cells_and_executes_from_generated_artifacts(
     assert all(
         cell.get("execution_count")
         for cell in executed.cells
-        if cell.cell_type == "code"
+        if cell.cell_type == "code" and cell.source.strip()
     )
     source = "\n".join("".join(cell.source) for cell in notebook.cells)
     assert "WRDS_USERNAME" not in source

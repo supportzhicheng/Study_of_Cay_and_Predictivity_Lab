@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 from pathlib import Path
 from typing import Any, Protocol, Sequence
@@ -10,6 +11,8 @@ from typing import Any, Protocol, Sequence
 import pandas as pd
 
 from src.settings import load_settings
+
+LOGGER = logging.getLogger(__name__)
 
 MARKET_TABLE_CANDIDATES = ("crsp.msi", "crspm.msi")
 TREASURY_TABLE_CANDIDATES = ("crspm.mcti", "crsp.mcti")
@@ -58,19 +61,28 @@ def build_select_query(table_name: str, fields: tuple[str, ...]) -> str:
 
 def pull_wrds_data(connection: WrdsConnection, raw_dir: Path) -> tuple[Path, Path]:
     """Discover subscription tables and write raw monthly CRSP caches."""
+    LOGGER.info("Discovering subscribed WRDS market table")
     market_table = discover_table(connection, MARKET_TABLE_CANDIDATES)
+    LOGGER.info("Using WRDS market table %s", market_table)
+    LOGGER.info("Discovering subscribed WRDS Treasury table")
     treasury_table = discover_table(connection, TREASURY_TABLE_CANDIDATES)
+    LOGGER.info("Using WRDS Treasury table %s", treasury_table)
+    LOGGER.info("Downloading WRDS market history")
     market = connection.raw_sql(
         build_select_query(market_table, MARKET_FIELDS), date_cols=["date"]
     )
+    LOGGER.info("Downloaded %d WRDS market rows", len(market))
+    LOGGER.info("Downloading WRDS Treasury history")
     treasury = connection.raw_sql(
         build_select_query(treasury_table, TREASURY_FIELDS), date_cols=["caldt"]
     )
+    LOGGER.info("Downloaded %d WRDS Treasury rows", len(treasury))
     raw_dir.mkdir(parents=True, exist_ok=True)
     market_path = raw_dir / "crsp_market_monthly.parquet"
     treasury_path = raw_dir / "crsp_treasury_monthly.parquet"
     market.to_parquet(market_path, index=False)
     treasury.to_parquet(treasury_path, index=False)
+    LOGGER.info("Wrote WRDS raw caches to %s", raw_dir)
     return market_path, treasury_path
 
 

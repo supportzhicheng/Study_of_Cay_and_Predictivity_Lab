@@ -31,15 +31,25 @@ The repository has two deliberately separate workstreams:
 ## Installation
 
 ```bash
-mamba create -n cay python=3.11
+mamba env create -f environment.yml
 mamba activate cay
-python -m pip install -r requirements.txt
 cp .env.example .env
+```
+
+Update an existing environment after the manifest changes with:
+
+```bash
+mamba env update -n cay -f environment.yml --prune
 ```
 
 Keep `WRDS_USERNAME` and `BEA_API_KEY` in `.env`. Keep the WRDS password in
 the user PostgreSQL password file. Raw licensed data, local reference files,
 and generated artifacts are ignored by Git.
+
+PDF report compilation additionally requires either Tectonic or a TeX
+distribution that provides the `latexmk` and `pdflatex` command-line
+executables. The unrelated PyPI package named `latexmk` does not provide these
+executables. The included `environment.yml` installs Tectonic from conda-forge.
 
 ## Core replication workflow
 
@@ -143,7 +153,8 @@ If you are new to the repo, follow this exact sequence:
 
 1. **Install dependencies**
    ```bash
-   pip install -r requirements.txt
+   mamba env create -f environment.yml
+   mamba activate cay
    ```
 2. **(Optional) Rebuild decomposition data files**
    ```bash

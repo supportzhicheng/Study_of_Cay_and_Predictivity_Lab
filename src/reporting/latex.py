@@ -8,23 +8,37 @@ from pathlib import Path
 
 
 def compile_latex_report(reports_dir: Path) -> Path:
-    """Compile the single report and always write the latexmk output log."""
+    """Compile the single report and always write the compiler output log."""
     build_dir = reports_dir / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
     log_path = build_dir / "latex_build.log"
     latexmk = shutil.which("latexmk")
-    if latexmk is None:
-        message = "latexmk is not installed. Install a TeX distribution with latexmk.\n"
+    tectonic = shutil.which("tectonic")
+    if latexmk is None and tectonic is None:
+        message = (
+            "No LaTeX compiler is installed. Install a TeX distribution with "
+            "latexmk or install Tectonic.\n"
+        )
         log_path.write_text(message, encoding="utf-8")
         raise RuntimeError(message.strip())
-    command = [
-        latexmk,
-        "-pdf",
-        "-interaction=nonstopmode",
-        "-halt-on-error",
-        f"-outdir={build_dir.resolve()}",
-        "main.tex",
-    ]
+    if latexmk is not None:
+        command = [
+            latexmk,
+            "-pdf",
+            "-interaction=nonstopmode",
+            "-halt-on-error",
+            f"-outdir={build_dir.resolve()}",
+            "main.tex",
+        ]
+    else:
+        command = [
+            tectonic,
+            "--keep-logs",
+            "--print",
+            "--outdir",
+            str(build_dir.resolve()),
+            "main.tex",
+        ]
     completed = subprocess.run(
         command,
         cwd=reports_dir / "paper",
