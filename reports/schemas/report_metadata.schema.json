@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "P10 report metadata",
+  "type": "object",
+  "required": [
+    "historical_sample_start",
+    "historical_sample_end",
+    "updated_latest_common_quarter",
+    "data_vintage",
+    "cay_historical_primary",
+    "cay_updated_primary",
+    "git_commit"
+  ],
+  "properties": {
+    "historical_sample_start": {"type": "string"},
+    "historical_sample_end": {"type": "string"},
+    "updated_latest_common_quarter": {"type": "string"},
+    "data_vintage": {"type": "string"},
+    "cay_historical_primary": {"type": "string"},
+    "cay_updated_primary": {"type": "string"},
+    "cay_robustness": {"type": "string"},
+    "risk_free_primary": {"type": "string"},
+    "term_spread_primary": {"type": "string"},
+    "git_commit": {"type": "string"}
+  },
+  "additionalProperties": true
+}

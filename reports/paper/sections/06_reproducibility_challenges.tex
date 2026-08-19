@@ -1,0 +1,35 @@
+\section{Reproducibility, Successes, and Challenges}
+
+This section documents how the project is rebuilt, where the historical
+replication succeeds, and where source definitions or data revisions create
+material differences. The report contains no code snippets; implementation
+and executable examples belong in the repository and notebook tour.
+
+\subsection{End-to-End Rebuild}
+
+The project separates raw-data acquisition, tidy-data construction, empirical
+analysis, and reporting. PyDoit orchestrates these stages and generates all
+numerical table entries, figure files, captions, metadata, and the final
+LaTeX report. The final build records the data vintage, sample endpoints, Git
+commit, and artifact checksums.
+
+\subsection{Replication Audit}
+
+\input{../tables/table_r1_replication_audit.tex}
+
+\subsection{Successes and Remaining Challenges}
+
+The machine-generated audit summary is \ReplicationAuditSummary. Strict passes
+identify close historical matches; revised-vintage passes isolate results that
+remain consistent after allowing the predeclared revision tolerance; failures
+remain visible for diagnosis. The primary risk-free convention is
+\RiskFreePrimary{}, and the primary term-spread convention is
+\TermSpreadPrimary{}. The pipeline constructs and compares both candidates
+before recording those choices. Changes in updated coefficients are reported
+as new empirical evidence, not as historical replication failures.
+
+\subsection{Data and Copyright Boundary}
+
+The repository records citations, series identifiers, transformations, and
+checksums, but does not commit copyrighted papers, screenshots, licensed CRSP
+extracts, or secrets. Local reference materials are resolved outside Git.

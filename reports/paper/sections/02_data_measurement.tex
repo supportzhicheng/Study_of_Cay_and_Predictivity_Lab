@@ -1,0 +1,41 @@
+\section{Data and Construction of \cay}
+
+The empirical construction uses quarterly consumption, labor income, and
+household net worth. Each series is converted to a real per-capita natural
+log before estimating the common trend.
+
+\subsection{Data Sources}
+
+Consumption and the components used to construct labor income come from the
+U.S. Bureau of Economic Analysis National Income and Product Accounts,
+accessed directly or through FRED \citep{bea_nipa,fred}. Household net worth
+comes from the Federal Reserve Financial Accounts, or Z.1
+\citep{federal_reserve_z1}. S\&P Composite prices, dividends, and earnings are
+obtained from Robert Shiller's data; CRSP value-weighted returns and the
+Treasury-bill series are obtained through WRDS/CRSP
+\citep{shiller_data,crsp_data}. The author-posted \cay{} series is used only as
+a validation target.
+The source manifest and generated metadata record exact series identifiers,
+table descriptions, transformations, download dates, and vintages. Licensed
+and copyrighted source files remain outside Git.
+
+\subsection{Dynamic Least Squares}
+
+The cointegrating vector is estimated using dynamic least squares with leads
+and lags of changes in asset wealth and labor income \citep{stock_watson_1993}.
+The paper reports
+\[
+c_t = 0.61 + 0.31a_t + 0.59y_t,
+\]
+and defines the reported predictor without subtracting the intercept:
+\[
+cay_t = c_t - 0.31a_t - 0.59y_t.
+\]
+
+\subsection{Validation}
+
+The historical construction uses \CayHistoricalDefinition{} over
+\HistoricalSampleStart--\HistoricalSampleEnd. Coefficient, posted-series, and
+exhibit discrepancies are evaluated by the generated replication audit rather
+than by visual similarity. The current aggregate audit status is
+\texttt{\OverallReplicationStatus}.

@@ -1,0 +1,84 @@
+contract_version: 2
+manual_inputs:
+- report_contract.yml
+- .gitignore
+- report_config.yml
+- captions.yml
+- source_manifest.yml
+- rubric_mapping.yml
+- paper/main.tex
+- paper/preamble.tex
+- paper/references.bib
+- paper/sections/*.tex
+generated_inputs_to_latex:
+- paper/generated/report_metadata.tex
+- paper/generated/replication_status.tex
+- paper/generated/generated_captions.tex
+generated_tables:
+- id: table_ii_replication
+  tex: tables/table_ii_replication.tex
+  csv: tables/table_ii_replication.csv
+  sample: historical
+- id: table_ii_updated
+  tex: tables/table_ii_updated.tex
+  csv: tables/table_ii_updated.csv
+  sample: updated
+- id: table_iii_replication
+  tex: tables/table_iii_replication.tex
+  csv: tables/table_iii_replication.csv
+  sample: historical
+- id: table_iii_updated
+  tex: tables/table_iii_updated.tex
+  csv: tables/table_iii_updated.csv
+  sample: updated
+- id: table_vi_replication
+  tex: tables/table_vi_replication.tex
+  csv: tables/table_vi_replication.csv
+  sample: historical
+- id: table_vi_updated
+  tex: tables/table_vi_updated.tex
+  csv: tables/table_vi_updated.csv
+  sample: updated
+- id: table_s1_core_data_summary
+  tex: tables/table_s1_core_data_summary.tex
+  csv: tables/table_s1_core_data_summary.csv
+  sample: historical_and_updated
+- id: table_r1_replication_audit
+  tex: tables/table_r1_replication_audit.tex
+  csv: tables/table_r1_replication_audit.csv
+  sample: historical
+generated_figures:
+- id: figure_1_replication
+  pdf: figures/figure_1_replication.pdf
+  png: figures/figure_1_replication.png
+  tex: figures/figure_1_replication.tex
+  sample: historical
+- id: figure_1_updated
+  pdf: figures/figure_1_updated.pdf
+  png: figures/figure_1_updated.png
+  tex: figures/figure_1_updated.tex
+  sample: updated
+- id: figure_s1_data_anatomy
+  pdf: figures/figure_s1_data_anatomy.pdf
+  png: figures/figure_s1_data_anatomy.png
+  tex: figures/figure_s1_data_anatomy.tex
+  sample: historical_and_updated
+caption_requirements:
+  require_title: true
+  require_label: true
+  require_sample_dates: true
+  require_data_vintage: true
+  require_takeaway: true
+  require_source_or_source_note: true
+forbidden_manual_content:
+- Regression coefficients typed directly into section prose when a generated macro is available
+- Updated sample endpoints hardcoded in section files
+- Tables whose numeric body is manually typed rather than generated
+- Claims that an updated relation strengthened or weakened without generated evidence
+- Code snippets in the LaTeX report
+build_outputs:
+- build/main.pdf
+- build/report_metadata.json
+- build/artifact_manifest.json
+- build/replication_status.txt
+- build/latex_build.log

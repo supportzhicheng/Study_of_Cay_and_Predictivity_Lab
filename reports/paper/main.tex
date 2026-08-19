@@ -1,0 +1,38 @@
+\documentclass[11pt]{article}
+
+\input{preamble}
+\input{generated/report_metadata}
+\input{generated/replication_status}
+\input{generated/generated_captions}
+
+\title{Consumption, Aggregate Wealth, and Expected Stock Returns:\\Replication and Updated Evidence}
+\author{Iris Wang \and Zhicheng Zhou}
+\date{FINM 32900}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This project reconstructs the consumption--wealth trend deviation $cay$,
+reproduces the principal empirical results of Lettau and Ludvigson (2001),
+and updates the evidence through \UpdatedSampleEnd. The report separates
+historical replication quality from updated empirical findings, documents the
+underlying data sources and construction choices, and adds original diagnostics
+for the macroeconomic inputs.
+\end{abstract}
+
+\input{sections/01_overview_theory}
+\input{sections/02_data_measurement}
+\input{sections/03_replication}
+\input{sections/04_updated_results}
+\input{sections/05_data_diagnostics}
+\input{sections/06_reproducibility_challenges}
+\input{sections/07_conclusion}
+
+\appendix
+\input{sections/appendix}
+
+\printbibliography
+
+\end{document}

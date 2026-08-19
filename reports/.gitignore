@@ -1,0 +1,29 @@
+# Generated LaTeX build products
+build/*
+!build/.gitkeep
+tables/*
+!tables/.gitkeep
+figures/*
+!figures/.gitkeep
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.synctex.gz
+
+# Generated metadata injected into the report
+paper/generated/report_metadata.tex
+paper/generated/replication_status.tex
+paper/generated/generated_captions.tex
+
+# Copyrighted or licensed reference materials are local-only and must not enter Git
+assets/reference/*
+!assets/reference/.gitkeep
+
+# Temporary rendered previews
+*.tmp
+*.bak

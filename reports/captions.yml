@@ -1,0 +1,148 @@
+table_ii_replication:
+  title: "Summary Statistics in the Original Sample"
+  label: "tab:table_ii_replication"
+  takeaway: >
+    This table evaluates whether the reconstructed cay series has the persistence,
+    scale, and correlations reported in the paper. The caption must compare cay's
+    persistence with the more persistent dividend yield and explain why this matters
+    for forecasting inference.
+  notes_required:
+    - "Sample dates"
+    - "Variable definitions"
+    - "Interpretation of the paper's dispersion row as a standard deviation"
+    - "Data vintage"
+  source: "Lettau and Ludvigson (2001), Table II"
+
+figure_1_replication:
+  title: "Excess Returns and the Consumption-Wealth Trend Deviation"
+  label: "fig:figure_1_replication"
+  takeaway: >
+    The figure provides descriptive evidence that large movements in cay often precede
+    movements in excess returns and that cay tends to be countercyclical. The caption
+    must state that formal predictive evidence is supplied by Tables III and VI.
+  notes_required:
+    - "Both series standardized over the displayed sample"
+    - "NBER recession shading"
+    - "Risk-free-rate definition"
+    - "Sample dates"
+  source: "Lettau and Ludvigson (2001), Figure 1"
+
+table_iii_replication:
+  title: "One-Quarter-Ahead Return Forecasting Regressions"
+  label: "tab:table_iii_replication"
+  takeaway: >
+    The table tests whether cay predicts next-quarter real and excess stock returns
+    and whether that information survives controls for traditional return predictors.
+    Because the dependent variable includes excess returns, the key coefficients speak
+    directly to variation in the equity risk premium.
+  notes_required:
+    - "Newey-West inference rule"
+    - "S&P versus CRSP return definitions"
+    - "Row 13 common-sample exception"
+    - "Sample dates"
+  source: "Lettau and Ludvigson (2001), Table III"
+
+table_vi_replication:
+  title: "Long-Horizon Consumption-Growth and Excess-Return Regressions"
+  label: "tab:table_vi_replication"
+  takeaway: >
+    The table distinguishes the two channels allowed by the present-value identity.
+    In the paper sample, cay has little forecasting power for consumption growth but
+    meaningful forecasting power for excess returns, especially at short and
+    intermediate horizons.
+  notes_required:
+    - "Forward cumulative outcome construction"
+    - "Horizons in quarters"
+    - "HAC treatment of overlapping observations"
+    - "Sample dates"
+  source: "Lettau and Ludvigson (2001), Table VI"
+
+table_ii_updated:
+  title: "Updated Summary Statistics"
+  label: "tab:table_ii_updated"
+  takeaway_instruction: >
+    State which predictor is most persistent in the updated sample, how cay's
+    volatility and persistence changed relative to the paper window, and the latest
+    common quarter. Use calculated values rather than fixed prose.
+  notes_required:
+    - "Updated sample dates"
+    - "Data download or vintage date"
+    - "Whether cay uses updated or fixed coefficients"
+
+figure_1_updated:
+  title: "Updated Excess Returns and the Consumption-Wealth Trend Deviation"
+  label: "fig:figure_1_updated"
+  takeaway_instruction: >
+    Describe whether the visual co-movement documented in the original sample remains
+    visible after 1998. Do not claim that the relationship strengthened or weakened
+    without calculated evidence.
+  notes_required:
+    - "Standardization window"
+    - "Latest common quarter"
+    - "Data vintage"
+
+
+table_iii_updated:
+  title: "Updated One-Quarter-Ahead Forecasting Regressions"
+  label: "tab:table_iii_updated"
+  takeaway_instruction: >
+    Compare the sign, magnitude, statistical precision, and adjusted R-squared of cay
+    with the original-sample estimates. A weaker updated coefficient is an empirical
+    result, not a failed historical replication.
+  notes_required:
+    - "Updated sample dates"
+    - "Data vintage"
+    - "Cay coefficient convention"
+
+
+table_vi_updated:
+  title: "Updated Long-Horizon Regressions"
+  label: "tab:table_vi_updated"
+  takeaway_instruction: >
+    Identify the horizon at which updated cay has its largest adjusted R-squared, and
+    compare the return and consumption-growth channels without assuming the original
+    pattern survives.
+  notes_required:
+    - "Updated sample dates"
+    - "Overlapping-outcome HAC rule"
+    - "Data vintage"
+
+
+table_s1_core_data_summary:
+  title: "Data Coverage and Summary Statistics for the Inputs to cay"
+  label: "tab:table_s1_core_data_summary"
+  takeaway_instruction: >
+    Report the largest volatility contrast among consumption growth, labor-income
+    growth, and household-net-worth growth; identify the most persistent predictor;
+    and explain why relative levels are useful. Use computed values in the caption.
+  notes_required:
+    - "Panel A: sources, transformations, and coverage"
+    - "Panel B: paper-sample and updated-sample statistics"
+    - "Units and annualization conventions"
+
+figure_s1_data_anatomy:
+  title: "The Shared Trend and Short-Run Divergence in Consumption, Income, and Wealth"
+  label: "fig:figure_s1_data_anatomy"
+  takeaway: >
+    The indexed levels illustrate the variables' common long-run movement, while
+    their growth rates reveal short-run divergences. The cointegrating residual is
+    designed to summarize those relative-level deviations.
+  notes_required:
+    - "Series indexed to 100 at first common observation"
+    - "Vertical marker at 1998Q3"
+    - "NBER recession shading"
+    - "Updated sample endpoint"
+
+table_r1_replication_audit:
+  title: "Replication Tolerance Audit"
+  label: "tab:table_r1_replication_audit"
+  takeaway_instruction: >
+    State which required outputs pass the strict historical tolerance, which
+    pass only the revised-vintage tolerance, and which require diagnosis. The
+    caption must distinguish source-vintage differences from implementation
+    errors. It must not treat updated-sample changes as replication failures.
+  notes_required:
+    - "Tolerance profile"
+    - "Data vintage"
+    - "Test execution date"
+    - "Pointers to the discrepancy report"

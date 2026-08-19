@@ -1,0 +1,92 @@
+rubric_url: https://finm-32900.github.io/FinalProject/final_project_rubric.html
+verified_date: '2026-08-18'
+total_points: 202
+report_layer_points: 68
+repository_layer_points: 134
+report_layer:
+  single_latex_document:
+    points: 4
+    status: scaffolded
+    evidence:
+    - paper/main.tex
+    - paper/sections/06_reproducibility_challenges.tex
+    acceptance: 'One compiled PDF briefly describes the project, data sources, historical replication, updated evidence, original diagnostics, successes, and challenges.
+
+      '
+  historical_replication:
+    points: 20
+    status: contracted
+    evidence:
+    - report_contract.yml
+    - tables/table_ii_replication.tex
+    - figures/figure_1_replication.pdf
+    - tables/table_iii_replication.tex
+    - tables/table_vi_replication.tex
+  updated_outputs:
+    points: 20
+    status: contracted
+    evidence:
+    - tables/table_ii_updated.tex
+    - figures/figure_1_updated.pdf
+    - tables/table_iii_updated.tex
+    - tables/table_vi_updated.tex
+  original_summary_and_chart:
+    points: 20
+    status: contracted
+    evidence:
+    - tables/table_s1_core_data_summary.tex
+    - figures/figure_s1_data_anatomy.pdf
+    - captions.yml
+  automatic_table_statistics:
+    points: 4
+    status: enforced_by_contract
+    evidence:
+    - report_contract.yml
+    - build/artifact_manifest.json
+repository_layer_outside_reports:
+  notebook_tour:
+    points: 4
+    required_path: notebooks/01_cay_replication_tour.ipynb
+  tidy_data_separation:
+    points: 4
+    required_paths:
+    - src/data/
+    - src/analysis/
+    - data/processed/
+  pydoit:
+    points: 4
+    required_path: dodo.py
+  unit_tests:
+    points: 4
+    required_path: tests/
+  test_purpose_quality:
+    points: 4
+    required_evidence: Each unit test documents a distinct failure mode and avoids unnecessary repetition
+  chartbook_and_cruft:
+    points: 4
+    required_evidence:
+    - .cruft.json
+    - cookiecutter chartbook structure
+  copyright_free_history:
+    points: 4
+    report_guard: reports/.gitignore and source_manifest.yml
+  secrets_and_env:
+    points: 12
+    required_paths:
+    - .env.example
+    - settings.py
+    - .gitignore
+  requirements:
+    points: 4
+    required_path: requirements.txt
+  readme_run_instructions_and_ownership:
+    points: 4
+    required_path: README.md
+  documentation:
+    points: 8
+    required_scope: All Python modules and appropriate functions
+  collaboration_and_oral_defense:
+    points: 78
+    note: 'Human-authored commits, merged pull requests, assigned-task completion, and oral-defense readiness cannot be satisfied by the reporting scaffold.
+
+      '

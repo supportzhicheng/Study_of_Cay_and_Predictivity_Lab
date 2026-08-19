@@ -1,0 +1,88 @@
+path_base: "reports"
+
+copyright_policy:
+  commit_reference_assets: false
+  local_reference_directory_env: "P10_REFERENCE_DIR"
+  note: >
+    The source paper, screenshots, proposal deck, and restricted raw data are
+    local-only materials. They must not be copied into the Git repository or
+    appear anywhere in Git history.
+  prohibited_git_paths:
+    - "assets/reference/LettauLudvigson2001ConsumptionAggregateWealth.pdf"
+    - "assets/reference/P10_Lettau_Ludvigson_Proposal_Theory_Replication_V2.pptx"
+    - "assets/reference/Figure1_original.png"
+    - "assets/reference/Table3_original.png"
+    - "assets/reference/Table4_original.png"
+
+primary_paper:
+  title: "Consumption, Aggregate Wealth, and Expected Stock Returns"
+  authors: "Martin Lettau and Sydney Ludvigson"
+  year: 2001
+  doi: "10.1111/0022-1082.00347"
+  expected_local_filename: "LettauLudvigson2001ConsumptionAggregateWealth.pdf"
+  role: "Primary source for theory, definitions, samples, targets, notes, and captions"
+
+proposal:
+  expected_local_filename: "P10_Lettau_Ludvigson_Proposal_Theory_Replication_V2.pptx"
+  role: "Approved theory and replication framing; extension is excluded from this workstream"
+
+targets:
+  table_ii:
+    description: "Summary Statistics"
+    journal_page: 826
+    pdf_page: 12
+    required: true
+
+  figure_1:
+    description: "Excess Returns and Trend Deviations"
+    journal_page: 827
+    pdf_page: 13
+    expected_local_image: "Figure1_original.png"
+    required: true
+
+  table_iii:
+    description: "Forecasting Quarterly Stock Returns"
+    journal_page: 828
+    pdf_page: 14
+    expected_local_image: "Table3_original.png"
+    required: true
+
+  table_iv:
+    description: "One-Quarter-Ahead Forecasts: Nested Comparisons"
+    journal_page: 834
+    pdf_page: 20
+    expected_local_image: "Table4_original.png"
+    required: false
+    note: "Optional appendix reference. This is not Table VI."
+
+  table_vi:
+    description: "Long-Horizon Regressions"
+    journal_page: 840
+    pdf_page: 26
+    required: true
+
+  data_appendix:
+    description: "Macroeconomic data definitions and cointegration tests"
+    journal_pages: "845--847"
+    pdf_pages: "31--33"
+    required: true
+
+validation:
+  posted_cay:
+    description: "Author-posted updated cay series"
+    role: "Validation only; never substitute it for the independently constructed predictor"
+    pinned_url: "https://raw.githubusercontent.com/mlettau/Data/1c5dd897fcd6aa8c38e4229de5bcfb849b18a57a/cay-data/cay_current.txt"
+    coverage: "1952Q1--2015Q3"
+    note: "Uses end-of-period wealth and switches from NDS to total PCE as of 2014Q3"
+
+historical_author_data:
+  expected_local_filename: "lldata_1999-09-16.txt"
+  archived_url: "https://web.archive.org/web/20010119094600id_/http://www.ny.frb.org:80/rmaghome/economist/lettau/lldata.txt"
+  coverage: "1952Q4--1998Q3"
+  role: "Paper-era c, a, y inputs and posted cay validation; historical DLS is still estimated independently"
+  timing: "Asset wealth is measured at the beginning of the quarter"
+
+resolution_order:
+  - "Use files already present in the course read-only resources."
+  - "Otherwise resolve the expected filenames under the P10_REFERENCE_DIR environment variable."
+  - "If still missing, stop with an actionable missing-source message; do not commit downloaded copyrighted files."

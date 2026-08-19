@@ -1,0 +1,82 @@
+project:
+  id: p10_lettau_ludvigson_2001
+  title: Consumption, Aggregate Wealth, and Expected Stock Returns
+  short_title: Consumption, Wealth, and Expected Returns
+  authors:
+  - Iris Wang
+  - Zhicheng Zhou
+  course: FINM 32900
+  institution: University of Chicago
+paper:
+  authors: Martin Lettau and Sydney Ludvigson
+  year: 2001
+  journal: The Journal of Finance
+  volume: 56
+  issue: 3
+  pages: 815--849
+  citation_key: lettau_ludvigson_2001
+samples:
+  historical:
+    start: 1952Q4
+    end: 1998Q3
+  updated:
+    end: auto_latest_common
+cay:
+  historical_primary: estimated_dls
+  updated_primary: estimated_dls
+  robustness:
+  - fixed_ll_coefficients
+  fixed_coefficients:
+    beta_asset: 0.31
+    beta_income: 0.59
+  subtract_intercept: false
+  dls_leads_lags: 8
+outputs:
+  historical:
+  - table_ii_replication
+  - figure_1_replication
+  - table_iii_replication
+  - table_vi_replication
+  updated:
+  - table_ii_updated
+  - figure_1_updated
+  - table_iii_updated
+  - table_vi_updated
+  original:
+  - table_s1_core_data_summary
+  - figure_s1_data_anatomy
+  audit:
+  - table_r1_replication_audit
+report:
+  include_extension: false
+  include_code_snippets: false
+  require_single_latex_document: true
+  require_data_sources_discussion: true
+  require_successes_and_challenges_discussion: true
+  require_reproducibility_discussion: true
+  external_notebook_path: ../../notebooks/01_cay_replication_tour.ipynb
+  display_precision:
+    coefficients: 3
+    t_statistics: 3
+    r_squared: 2
+    correlations: 2
+  output_formats:
+    tables:
+    - tex
+    - csv
+    figures:
+    - pdf
+    - png
+    - tex
+copyright:
+  commit_reference_assets: false
+  reference_dir_env: P10_REFERENCE_DIR
+build:
+  fail_on_missing_caption: true
+  fail_on_missing_caption_takeaway: true
+  fail_on_missing_sample_dates: true
+  fail_on_missing_vintage: true
+  fail_on_stale_artifacts: true
+  fail_on_manual_numeric_table_cells: true
+  fail_on_missing_replication_audit: true
+  final_pdf: build/main.pdf
