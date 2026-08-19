@@ -78,6 +78,7 @@ def run_hac_regression(
     combined = pd.concat([outcome.rename(outcome_name), predictors], axis=1).dropna()
     if combined.empty:
         raise ValueError("No complete observations remain for forecasting regression.")
+    combined = combined.astype(float)
     y = combined.iloc[:, 0]
     x = sm.add_constant(combined.iloc[:, 1:], has_constant="add")
     bandwidth = (

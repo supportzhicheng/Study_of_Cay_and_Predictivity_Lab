@@ -69,6 +69,7 @@ def normalize_pulled_sources(
 
     fred = _datetime_index(pd.read_parquet(paths["fred"]), "date")
     fred_last_columns = [
+        "total_real_pce",
         "pce_price_index",
         "household_net_worth",
         "tbill_3m_yield",

@@ -9,14 +9,17 @@ from src.analysis.exhibit_io import write_figure_artifacts, write_table_artifact
 
 
 def test_table_writer_creates_csv_and_latex(tmp_path: Path):
-    table = pd.DataFrame({"metric": ["mean"], "value": [1.25]})
+    table = pd.DataFrame({"metric_name": ["sample_mean"], "value": [1.25]})
 
     artifacts = write_table_artifacts(table, tmp_path, "table_test")
 
     assert artifacts.csv.exists()
     assert artifacts.tex.exists()
     assert "1.25" in artifacts.csv.read_text(encoding="utf-8")
-    assert "tabular" in artifacts.tex.read_text(encoding="utf-8")
+    latex = artifacts.tex.read_text(encoding="utf-8")
+    assert "tabular" in latex
+    assert r"metric\_name" in latex
+    assert r"sample\_mean" in latex
 
 
 def test_figure_writer_creates_pdf_png_and_wrapper(tmp_path: Path):

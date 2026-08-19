@@ -69,14 +69,14 @@ def task_config():
 
 def task_pull_author_data():
     """Download and normalize pinned author validation files."""
+
+    def pull_author_data():
+        ensure_author_data(
+            SETTINGS.data_dir / "normalized", vintage=SETTINGS.end_date
+        )
+
     return {
-        "actions": [
-            (
-                ensure_author_data,
-                [SETTINGS.data_dir / "normalized"],
-                {"vintage": SETTINGS.end_date},
-            )
-        ],
+        "actions": [pull_author_data],
         "task_dep": ["config"],
         "targets": [
             str(SETTINGS.data_dir / "normalized" / f"{filename}.{suffix}")
@@ -105,22 +105,28 @@ def task_import_sources():
 
 def task_normalize_pulled_sources():
     """Transform standard live-pull caches into quarterly contracts."""
+
+    def normalize_sources():
+        normalize_pulled_sources(
+            SETTINGS.data_dir / "raw",
+            SETTINGS.data_dir / "normalized",
+            vintage=SETTINGS.end_date,
+        )
+
     return {
-        "actions": [
-            (
-                normalize_pulled_sources,
-                [SETTINGS.data_dir / "raw", SETTINGS.data_dir / "normalized"],
-                {"vintage": SETTINGS.end_date},
-            )
-        ],
+        "actions": [normalize_sources],
         "task_dep": ["config"],
     }
 
 
 def task_build_panel():
     """Merge normalized sources and write panel metadata."""
+
+    def build():
+        build_panel(SETTINGS)
+
     return {
-        "actions": [(build_panel, [SETTINGS])],
+        "actions": [build],
         "file_dep": [
             str(
                 SETTINGS.data_dir
@@ -136,8 +142,12 @@ def task_build_panel():
 
 def task_generate_exhibits():
     """Generate all 32 pre-PDF report artifacts."""
+
+    def generate():
+        generate_exhibits(SETTINGS)
+
     return {
-        "actions": [(generate_exhibits, [SETTINGS])],
+        "actions": [generate],
         "file_dep": [
             str(PANEL_PATH),
             str(PANEL_METADATA_PATH),
@@ -201,8 +211,12 @@ def task_run_notebook():
 
 def task_compile_report():
     """Compile LaTeX and persist the build log."""
+
+    def compile_report():
+        compile_latex_report(SETTINGS.reports_dir)
+
     return {
-        "actions": [(compile_latex_report, [SETTINGS.reports_dir])],
+        "actions": [compile_report],
         "file_dep": [
             str(path) for path in (*GENERATED_ARTIFACTS, MANIFEST_PATH, *REPORT_SOURCES)
         ],
@@ -217,11 +231,21 @@ def task_compile_report():
 def task_run_tests():
     """Run deterministic tests and write JUnit XML."""
     SETTINGS.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def run_tests():
+        subprocess.run(
+            [
+                str(Path(__import__("sys").executable)),
+                "-m",
+                "pytest",
+                "-q",
+                f"--junitxml={SETTINGS.output_dir / 'pytest.xml'}",
+            ],
+            check=True,
+        )
+
     return {
-        "actions": [
-            f"{__import__('sys').executable} -m pytest -q "
-            f"--junitxml={SETTINGS.output_dir / 'pytest.xml'}"
-        ],
+        "actions": [run_tests],
         "targets": [str(SETTINGS.output_dir / "pytest.xml")],
     }
 

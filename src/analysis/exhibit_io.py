@@ -35,7 +35,7 @@ def write_table_artifacts(
     csv_path = output_dir / f"{artifact_id}.csv"
     tex_path = output_dir / f"{artifact_id}.tex"
     table.to_csv(csv_path, index=False)
-    tabular = table.to_latex(index=False)
+    tabular = table.to_latex(index=False, escape=True)
     if caption_macro and label:
         tabular = "\n".join(
             [

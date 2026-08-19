@@ -9,6 +9,41 @@ import dodo
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_pull_author_action_returns_valid_doit_result(monkeypatch):
+    monkeypatch.setattr(dodo, "ensure_author_data", lambda *args, **kwargs: (1, 2))
+    action = dodo.task_pull_author_data()["actions"][0]
+
+    assert action() is None
+
+
+def test_pipeline_actions_discard_library_return_values(monkeypatch):
+    monkeypatch.setattr(dodo, "normalize_pulled_sources", lambda *args, **kwargs: {})
+    monkeypatch.setattr(dodo, "build_panel", lambda *args, **kwargs: dodo.PANEL_PATH)
+    monkeypatch.setattr(dodo, "generate_exhibits", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        dodo, "compile_latex_report", lambda *args, **kwargs: dodo.REPORT_SOURCES[0]
+    )
+
+    for task_factory in (
+        dodo.task_normalize_pulled_sources,
+        dodo.task_build_panel,
+        dodo.task_generate_exhibits,
+        dodo.task_compile_report,
+    ):
+        assert task_factory()["actions"][0]() is None
+
+
+def test_run_tests_passes_junit_path_as_one_argument(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dodo.subprocess, "run", lambda command, **kwargs: calls.append((command, kwargs)))
+
+    assert dodo.task_run_tests()["actions"][0]() is None
+
+    command, kwargs = calls[0]
+    assert command[-1] == f"--junitxml={dodo.SETTINGS.output_dir / 'pytest.xml'}"
+    assert kwargs == {"check": True}
+
+
 def test_pipeline_help_lists_all_commands():
     completed = subprocess.run(
         [sys.executable, "-m", "src.pipeline", "--help"],

@@ -40,7 +40,7 @@ def test_labor_tax_allocation_formula():
     assert allocate_labor_taxes(frame).iloc[0] == 10.0
 
 
-def test_core_macro_uses_declared_consumption_and_labor_formulas():
+def test_core_macro_uses_total_real_pce_and_declared_labor_formula():
     index = pd.period_range("2000Q1", periods=2, freq="Q")
     bea = pd.DataFrame(
         {
@@ -61,6 +61,7 @@ def test_core_macro_uses_declared_consumption_and_labor_formulas():
     )
     fred = pd.DataFrame(
         {
+            "total_real_pce": [100.0, 100.0],
             "household_net_worth": [1000.0, 1000.0],
             "pce_price_index": [100.0, 200.0],
             "population_candidate": [10.0, 10.0],
@@ -95,6 +96,7 @@ def test_core_macro_rejects_nonpositive_real_levels():
     )
     fred = pd.DataFrame(
         {
+            "total_real_pce": [-1.0],
             "household_net_worth": [100.0],
             "pce_price_index": [100.0],
             "population_candidate": [10.0],

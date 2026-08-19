@@ -15,6 +15,15 @@ from src.analysis.forecasting import (
 )
 
 
+def test_hac_regression_accepts_nullable_numeric_dtypes():
+    index = pd.period_range("2000Q1", periods=12, freq="Q")
+    predictor = pd.Series(range(12), index=index, dtype="Float64", name="signal")
+    outcome = pd.Series(range(1, 13), index=index, dtype="Float64", name="return")
+
+    result = run_hac_regression(outcome, predictor.to_frame(), horizon=1)
+
+    assert result.observations == 12
+    assert result.coefficients["signal"] == pytest.approx(1.0)
 def test_estimate_cay_uses_interior_fit_and_full_level_construction():
     frame = make_synthetic_dataset(n_periods=80, seed=5)
 

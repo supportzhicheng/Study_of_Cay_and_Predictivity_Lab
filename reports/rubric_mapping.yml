@@ -78,7 +78,7 @@ repository_layer_outside_reports:
     - .gitignore
   requirements:
     points: 4
-    required_path: requirements.txt
+    required_path: environment.yml
   readme_run_instructions_and_ownership:
     points: 4
     required_path: README.md
