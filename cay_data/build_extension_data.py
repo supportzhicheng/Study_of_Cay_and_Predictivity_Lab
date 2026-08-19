@@ -13,7 +13,6 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 RAW = ROOT / "raw"
 
@@ -211,7 +210,6 @@ def build_regional_proxy_dataset() -> None:
     quarters = [
         q for q in sorted(national.keys(), key=_quarter_key) if _quarter_key(q) >= (1989, 3)
     ]
-    years = sorted({int(q[:4]) for q in quarters if int(q[:4]) >= 1989})
 
     hpi_q: dict[str, dict[str, float]] = {s: {} for s in list(STATES) + ["US"]}
     for state_or_us, series_id in FRED_HPI_IDS.items():

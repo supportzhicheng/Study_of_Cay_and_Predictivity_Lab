@@ -23,11 +23,10 @@ coefficient when entered individually or jointly.
 
 from __future__ import annotations
 
-from itertools import combinations
 import math
+from itertools import combinations
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from cay_lab.analysis.cay_builder import CayBuilder

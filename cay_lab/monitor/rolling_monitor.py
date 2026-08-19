@@ -161,8 +161,8 @@ class RollingPredictivityMonitor:
     # ------------------------------------------------------------------
     def plot(self, ax=None):
         """Plot the rolling t-statistic and highlight status regions."""
-        import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
+        import matplotlib.pyplot as plt
 
         if self.rolling_results_ is None:
             raise RuntimeError("Call run() first.")

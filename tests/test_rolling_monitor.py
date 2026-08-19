@@ -2,8 +2,8 @@
 
 import pytest
 
-from cay_lab.data.loader import make_synthetic_dataset
 from cay_lab.analysis.cay_builder import CayBuilder
+from cay_lab.data.loader import make_synthetic_dataset
 from cay_lab.monitor.rolling_monitor import RollingPredictivityMonitor
 
 

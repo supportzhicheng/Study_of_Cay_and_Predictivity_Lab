@@ -7,7 +7,6 @@ prediction regressions, with Newey-West standard errors.
 from __future__ import annotations
 
 import pandas as pd
-import numpy as np
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
 

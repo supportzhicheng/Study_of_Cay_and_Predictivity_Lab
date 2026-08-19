@@ -6,8 +6,8 @@ Usage example:
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -18,8 +18,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cay_lab.analysis.predictive_regression import PredictiveRegression
-from cay_lab.data.loader import prepare_predictivity_dataset
+from cay_lab.analysis.predictive_regression import PredictiveRegression  # noqa: E402
+from cay_lab.data.loader import prepare_predictivity_dataset  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "cay_lab" / "output"
 

@@ -6,7 +6,6 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 RAW_HOUSEHOLDS_PATH = ROOT / "raw" / "FRB_Z1_S14_b_Q.csv"
 RAW_HNPO_PATH = ROOT / "raw" / "FRB_Z1_S1M_b_Q.csv"

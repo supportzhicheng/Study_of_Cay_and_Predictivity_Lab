@@ -17,14 +17,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # Column name constants (used across the whole package)
 # ---------------------------------------------------------------------------
-COL_C = "c"       # log real consumption per capita
-COL_A = "a"       # log real household net worth per capita
-COL_Y = "y"       # log real labour income per capita
-COL_ER = "er"     # excess log stock return (e.g., annual or quarterly)
+COL_C = "c"  # log real consumption per capita
+COL_A = "a"  # log real household net worth per capita
+COL_Y = "y"  # log real labour income per capita
+COL_ER = "er"  # excess log stock return (e.g., annual or quarterly)
 
 COMPONENTS = ("housing", "financial", "liquid")
 _DEFAULT_CAY_DATA_DIR = Path(__file__).resolve().parents[2] / "cay_data"
@@ -108,8 +107,10 @@ def load_cay_decomposition(
         df = df[df.index <= pd.Period(end, freq="Q")]
 
     component_cols = [
-        col for col in df.columns
-        if col.endswith("_wealth_million_usd") or col.endswith("_proxy_scaled_million_usd")
+        col
+        for col in df.columns
+        if col.endswith("_wealth_million_usd")
+        or col.endswith("_proxy_scaled_million_usd")
     ]
     if dropna_components and component_cols:
         df = df.dropna(subset=component_cols)
@@ -222,9 +223,9 @@ def prepare_predictivity_dataset(
             seg_df[f"sub_cay_{comp}"] = log_col - hist_mean
 
         target_raw = component_col_map[target_component]
-        seg_df["target_future_growth"] = (
-            np.log(seg_df[target_raw]).shift(-prediction_window) - np.log(seg_df[target_raw])
-        )
+        seg_df["target_future_growth"] = np.log(seg_df[target_raw]).shift(
+            -prediction_window
+        ) - np.log(seg_df[target_raw])
         rows.append(seg_df)
 
     final_df = pd.concat(rows).sort_index()

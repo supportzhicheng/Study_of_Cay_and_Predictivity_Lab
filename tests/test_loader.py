@@ -5,12 +5,9 @@ import pandas as pd
 import pytest
 
 from cay_lab.data.loader import (
-    make_synthetic_dataset,
-    log_transform,
-    COL_C,
-    COL_A,
-    COL_Y,
     load_cay_decomposition,
+    log_transform,
+    make_synthetic_dataset,
     prepare_predictivity_dataset,
 )
 
@@ -66,9 +63,27 @@ def test_prepare_predictivity_dataset_has_subcay_and_target():
         start="1990Q1",
         end="2000Q4",
     )
-    required = {"segment", "target_future_growth", "sub_cay_housing", "sub_cay_financial", "sub_cay_liquid"}
+    required = {
+        "segment",
+        "target_future_growth",
+        "sub_cay_housing",
+        "sub_cay_financial",
+        "sub_cay_liquid",
+    }
     assert required.issubset(set(df.columns))
-    assert not df[["target_future_growth", "sub_cay_housing", "sub_cay_financial", "sub_cay_liquid"]].isna().any().any()
+    assert (
+        not df[
+            [
+                "target_future_growth",
+                "sub_cay_housing",
+                "sub_cay_financial",
+                "sub_cay_liquid",
+            ]
+        ]
+        .isna()
+        .any()
+        .any()
+    )
     assert df.attrs["train_periods"] == 20
     assert df.attrs["prediction_window"] == 1
 
