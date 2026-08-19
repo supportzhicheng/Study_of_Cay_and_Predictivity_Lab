@@ -1,0 +1,7 @@
+[project]
+title = "Consumption, Aggregate Wealth, and Expected Stock Returns"
+authors = ["Iris Wang", "Zhicheng Zhou"]
+
+[paths]
+reports = "reports"
+data = "_data"

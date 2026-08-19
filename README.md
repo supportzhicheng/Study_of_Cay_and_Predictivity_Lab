@@ -1,33 +1,90 @@
-# CAY Lab – Study of CAY and Predictivity
+# CAY Analysis Suite
 
 ## Overview
 
-**CAY** is the consumption-wealth ratio introduced by Lettau & Ludvigson (2001).
-It is a cointegrating residual from the long-run relation among consumption (`c`),
-asset wealth (`a`), and labour income (`y`):
+This repository independently replicates and updates Lettau and Ludvigson
+(2001), "Consumption, Aggregate Wealth, and Expected Stock Returns."
+
+The reported consumption-wealth trend deviation is constructed from log real
+per-capita consumption (`c`), asset wealth (`a`), and labor income (`y`):
 
 ```
-cay_t = c_t - β_a · a_t - β_y · y_t - const
+cay_t = c_t - β_a · a_t - β_y · y_t
 ```
 
-CAY has been shown to be a strong predictor of excess stock-market returns.
+The DLS regression estimates a constant, but the paper-convention CAY series
+does not subtract it. CAY is a theory-motivated state variable, not a direct
+measure of risk aversion or a trading signal.
 
-This lab contains:
+The repository has two deliberately separate workstreams:
 
-| Module | Description |
-|--------|-------------|
-| `cay_lab/data/` | Data loading and cleaning utilities |
-| `cay_lab/analysis/` | CAY construction, decomposition, and predictive regression |
-| `cay_lab/monitor/` | Rolling / expanding-window predictivity monitor |
-| `tests/` | Unit tests |
+| Path | Description |
+|---|---|
+| `src/` | Core replication, updated analysis, acquisition, and reporting |
+| `reports/` | Report contracts, LaTeX source, schemas, and generated artifacts |
+| `notebooks/` | Inspection-only replication tour |
+| `cay_lab/`, `cay_data/` | Optional pre-existing wealth-decomposition extension |
+| `tests/` | Deterministic tests with fake service boundaries |
 
 ---
 
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+mamba create -n cay python=3.11
+mamba activate cay
+python -m pip install -r requirements.txt
+cp .env.example .env
 ```
+
+Keep `WRDS_USERNAME` and `BEA_API_KEY` in `.env`. Keep the WRDS password in
+the user PostgreSQL password file. Raw licensed data, local reference files,
+and generated artifacts are ignored by Git.
+
+## Core replication workflow
+
+Inspect configuration and available tasks:
+
+```bash
+python -m src.settings
+doit list
+```
+
+The credentialed real-data build is:
+
+```bash
+python -m src.bootstrap_real_data --compile-report
+```
+
+Individual stages are also available:
+
+```bash
+python -m src.data.pull_author_cay
+python -m src.data.pull_fred
+python -m src.data.pull_bea
+python -m src.data.pull_wrds
+python -m src.data.import_local SOURCE_ID
+python -m src.data.build_sources
+python -m src.pipeline panel
+python -m src.pipeline exhibits
+python -m src.pipeline report
+```
+
+Live acquisition never fabricates fallback observations. Equivalent local
+CSV, Parquet, XLSX, or XLS files may be supplied under `P10_INPUT_DIR`, but
+they must satisfy the same normalized quarterly contracts.
+
+## Verification
+
+```bash
+python -m pytest -q
+ruff check .
+ruff format --check src tests dodo.py settings.py \
+   cay_lab/analysis/cay_builder.py cay_lab/data/__init__.py cay_lab/data/loader.py
+git diff --check
+```
+
+The remaining sections document the optional decomposition extension.
 
 ## Repository structure
 
