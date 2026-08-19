@@ -13,7 +13,6 @@ The residual ``cay_t`` is the object of interest.
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
@@ -42,16 +41,32 @@ class CayBuilder:
         The underlying ``statsmodels`` OLS result object.
     """
 
-    def __init__(self, df: pd.DataFrame, lags: int = 2):
+    def __init__(self, df: pd.DataFrame, lags: int = 8):
         required = {"c", "a", "y"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(f"DataFrame is missing columns: {missing}")
-        self._df = df[["c", "a", "y"]].dropna()
+        if lags < 0:
+            raise ValueError("lags must be nonnegative.")
+        if not isinstance(df.index, pd.PeriodIndex) or not df.index.freqstr.startswith(
+            "Q"
+        ):
+            raise ValueError("DataFrame must use a quarterly PeriodIndex.")
+        if df.index.has_duplicates:
+            raise ValueError("DataFrame index must contain unique quarters.")
+        if df[["c", "a", "y"]].isna().any().any():
+            raise ValueError(
+                "DataFrame columns c, a, and y must not contain missing values."
+            )
+        if df.empty:
+            raise ValueError("DataFrame must not be empty.")
+        self._df = df[["c", "a", "y"]].copy()
         self.lags = lags
         self.cay: pd.Series | None = None
         self.coef_: dict | None = None
         self.model_result_ = None
+        self.estimation_start_: pd.Period | None = None
+        self.estimation_end_: pd.Period | None = None
 
     # ------------------------------------------------------------------
     def fit(self) -> "CayBuilder":
@@ -69,8 +84,6 @@ class CayBuilder:
 
         aug_cols: dict[str, pd.Series] = {}
         for k in range(-self.lags, self.lags + 1):
-            if k == 0:
-                continue
             aug_cols[f"da_lag{k}"] = da.shift(-k)
             aug_cols[f"dy_lag{k}"] = dy.shift(-k)
 
@@ -80,11 +93,15 @@ class CayBuilder:
 
         # Align and drop rows with NaN (from differencing / shifting)
         combined = pd.concat([y, X], axis=1).dropna()
+        if combined.empty:
+            raise ValueError("No complete observations remain for DLS estimation.")
         y_clean = combined.iloc[:, 0]
         X_clean = combined.iloc[:, 1:]
 
         result = OLS(y_clean, X_clean).fit()
         self.model_result_ = result
+        self.estimation_start_ = combined.index.min()
+        self.estimation_end_ = combined.index.max()
 
         self.coef_ = {
             "const": result.params["const"],
@@ -92,13 +109,10 @@ class CayBuilder:
             "beta_y": result.params["y"],
         }
 
-        # Compute residual on the *full* aligned sample
-        fitted = (
-            self.coef_["const"]
-            + self.coef_["beta_a"] * df["a"]
-            + self.coef_["beta_y"] * df["y"]
-        )
-        self.cay = (df["c"] - fitted).rename("cay")
+        # Paper convention: estimate the intercept, but do not subtract it.
+        self.cay = (
+            df["c"] - self.coef_["beta_a"] * df["a"] - self.coef_["beta_y"] * df["y"]
+        ).rename("cay")
         return self
 
     # ------------------------------------------------------------------
