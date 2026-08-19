@@ -1,0 +1,46 @@
+historical_sample:
+  start: 1952Q4
+  end: 1998Q3
+  quarters: 184
+
+dls:
+  beta_asset: 0.31
+  beta_income: 0.59
+
+table_ii:
+  cay_ar1: 0.79
+  excess_return_cay_correlation: 0.28
+  dividend_yield_cay_correlation: 0.43
+  relative_bill_rate_cay_correlation: -0.23
+
+table_iii:
+  row_2: {cay_coefficient: 2.220, cay_t_statistic: 3.024, adjusted_r_squared: 0.09}
+  row_4: {cay_coefficient: 2.513, cay_t_statistic: 4.754, adjusted_r_squared: 0.10}
+  row_6: {cay_coefficient: 2.165, cay_t_statistic: 3.226, adjusted_r_squared: 0.09}
+  row_8: {cay_coefficient: 2.528, cay_t_statistic: 4.583, adjusted_r_squared: 0.10}
+  row_13:
+    cay_coefficient: 1.906
+    cay_t_statistic: 3.197
+    term_spread_coefficient: -0.082
+    adjusted_r_squared: 0.10
+
+table_vi:
+  excess_returns_cay:
+    1: {coefficient: 2.16, t_statistic: 3.44, adjusted_r_squared: 0.09}
+    2: {coefficient: 3.80, t_statistic: 3.34, adjusted_r_squared: 0.12}
+    3: {coefficient: 5.43, t_statistic: 3.37, adjusted_r_squared: 0.16}
+    4: {coefficient: 6.72, t_statistic: 3.70, adjusted_r_squared: 0.18}
+    8: {coefficient: 8.35, t_statistic: 3.73, adjusted_r_squared: 0.16}
+    12: {coefficient: 8.57, t_statistic: 3.24, adjusted_r_squared: 0.15}
+    16: {coefficient: 7.86, t_statistic: 2.99, adjusted_r_squared: 0.11}
+    24: {coefficient: 12.44, t_statistic: 3.41, adjusted_r_squared: 0.16}
+
+tolerances:
+  dls_coefficient: {strict: 0.01, revised: 0.04}
+  posted_cay_correlation: {strict: 0.01, revised: 0.05}
+  table_ii: {strict: 0.02, revised: 0.05}
+  table_iii_coefficient: {strict: 0.15, revised: 0.35}
+  table_iii_t_statistic: {strict: 0.40, revised: 0.80}
+  table_iii_adjusted_r_squared: {strict: 0.015, revised: 0.04}
+  table_vi_t_statistic: {strict: 0.50, revised: 1.00}
+  table_vi_adjusted_r_squared: {strict: 0.02, revised: 0.05}
