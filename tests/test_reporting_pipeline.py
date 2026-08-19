@@ -1,5 +1,6 @@
 """Integration test for the complete 32-artifact report build."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -53,11 +54,20 @@ def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
     targets_dir.mkdir()
     targets_path = targets_dir / "paper_targets.yml"
     shutil.copy2(PROJECT_ROOT / "config" / "paper_targets.yml", targets_path)
+    processed_dir = tmp_path / "_data" / "processed"
+    processed_dir.mkdir(parents=True)
+    panel_path = processed_dir / "core_quarterly.parquet"
+    panel_metadata_path = processed_dir / "core_quarterly.metadata.json"
+    panel = report_panel()
+    panel.to_parquet(panel_path)
+    panel_metadata_path.write_text("{}\n", encoding="utf-8")
 
     artifacts = generate_report_artifacts(
-        report_panel(),
+        panel,
         reports_dir,
         targets_path,
+        panel_path=panel_path,
+        panel_metadata_path=panel_metadata_path,
         data_vintage="2026-08-18",
         git_commit="test-commit",
     )
@@ -67,3 +77,25 @@ def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
     assert all(path.exists() and path.stat().st_size > 0 for path in artifacts)
     assert len(list((reports_dir / "tables").glob("*"))) == 16
     assert len(list((reports_dir / "figures").glob("*"))) == 9
+
+    manifest = json.loads(
+        (reports_dir / "build" / "artifact_manifest.json").read_text(encoding="utf-8")
+    )
+    required_dependencies = {
+        str(panel_path),
+        str(panel_metadata_path),
+        str(reports_dir / "captions.yml"),
+    }
+    assert all(
+        required_dependencies <= set(entry["source_dependencies"])
+        for entry in manifest["artifacts"]
+    )
+
+    table_iii = pd.read_csv(reports_dir / "tables" / "table_iii_updated.csv")
+    actual_endpoint = table_iii["sample_end"].max()
+    captions = (
+        reports_dir / "paper" / "generated" / "generated_captions.tex"
+    ).read_text(encoding="utf-8")
+    assert actual_endpoint in captions
+    assert "most persistent updated predictor" in captions
+    assert "requiring diagnosis" in captions

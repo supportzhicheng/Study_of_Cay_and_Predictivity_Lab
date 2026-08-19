@@ -8,14 +8,58 @@ from pathlib import Path
 from src.bootstrap_real_data import bootstrap_real_data
 from src.data.build_sources import normalize_pulled_sources
 from src.data.import_local import import_local_source
-from src.data.pull_author_cay import pull_author_data
-from src.data.source_registry import SOURCE_REGISTRY
+from src.data.pull_author_cay import ensure_author_data
+from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
 from src.pipeline import build_panel, generate_exhibits
 from src.reporting.latex import compile_latex_report
 from src.settings import load_settings
 
 SETTINGS = load_settings([])
 PANEL_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.parquet"
+PANEL_METADATA_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.metadata.json"
+MANIFEST_PATH = SETTINGS.reports_dir / "build" / "artifact_manifest.json"
+BOOTSTRAP_MARKER = SETTINGS.output_dir / "bootstrap_real_data.complete"
+TARGETS_PATH = SETTINGS.project_root / "config" / "paper_targets.yml"
+
+TABLE_IDS = (
+    "table_ii_replication",
+    "table_ii_updated",
+    "table_iii_replication",
+    "table_iii_updated",
+    "table_vi_replication",
+    "table_vi_updated",
+    "table_s1_core_data_summary",
+    "table_r1_replication_audit",
+)
+FIGURE_IDS = (
+    "figure_1_replication",
+    "figure_1_updated",
+    "figure_s1_data_anatomy",
+)
+GENERATED_ARTIFACTS = (
+    *(
+        SETTINGS.reports_dir / "tables" / f"{artifact_id}.{suffix}"
+        for artifact_id in TABLE_IDS
+        for suffix in ("csv", "tex")
+    ),
+    *(
+        SETTINGS.reports_dir / "figures" / f"{artifact_id}.{suffix}"
+        for artifact_id in FIGURE_IDS
+        for suffix in ("pdf", "png", "tex")
+    ),
+    SETTINGS.reports_dir / "paper" / "generated" / "report_metadata.tex",
+    SETTINGS.reports_dir / "paper" / "generated" / "replication_status.tex",
+    SETTINGS.reports_dir / "paper" / "generated" / "generated_captions.tex",
+    SETTINGS.reports_dir / "build" / "report_metadata.json",
+    SETTINGS.reports_dir / "build" / "replication_status.txt",
+    SETTINGS.reports_dir / "build" / "current_vintage_cay_comparison.csv",
+)
+REPORT_SOURCES = (
+    SETTINGS.reports_dir / "paper" / "main.tex",
+    SETTINGS.reports_dir / "paper" / "preamble.tex",
+    SETTINGS.reports_dir / "paper" / "references.bib",
+    *sorted((SETTINGS.reports_dir / "paper" / "sections").glob("*.tex")),
+)
 
 
 def task_config():
@@ -28,12 +72,17 @@ def task_pull_author_data():
     return {
         "actions": [
             (
-                pull_author_data,
+                ensure_author_data,
                 [SETTINGS.data_dir / "normalized"],
                 {"vintage": SETTINGS.end_date},
             )
         ],
         "task_dep": ["config"],
+        "targets": [
+            str(SETTINGS.data_dir / "normalized" / f"{filename}.{suffix}")
+            for filename in ("paper_macro_quarterly", "posted_cay_quarterly")
+            for suffix in ("parquet", "metadata.json")
+        ],
     }
 
 
@@ -72,8 +121,16 @@ def task_build_panel():
     """Merge normalized sources and write panel metadata."""
     return {
         "actions": [(build_panel, [SETTINGS])],
-        "targets": [str(PANEL_PATH)],
-        "task_dep": ["config"],
+        "file_dep": [
+            str(
+                SETTINGS.data_dir
+                / "normalized"
+                / f"{SOURCE_REGISTRY[source_id].filename_stem}.parquet"
+            )
+            for source_id in required_panel_sources()
+        ],
+        "targets": [str(PANEL_PATH), str(PANEL_METADATA_PATH)],
+        "task_dep": ["pull_author_data", "import_sources"],
     }
 
 
@@ -81,8 +138,16 @@ def task_generate_exhibits():
     """Generate all 32 pre-PDF report artifacts."""
     return {
         "actions": [(generate_exhibits, [SETTINGS])],
-        "file_dep": [str(PANEL_PATH)],
-        "targets": [str(SETTINGS.reports_dir / "build" / "artifact_manifest.json")],
+        "file_dep": [
+            str(PANEL_PATH),
+            str(PANEL_METADATA_PATH),
+            str(TARGETS_PATH),
+            str(SETTINGS.reports_dir / "captions.yml"),
+            str(SETTINGS.reports_dir / "report_config.yml"),
+            str(SETTINGS.reports_dir / "report_contract.yml"),
+        ],
+        "targets": [str(path) for path in (*GENERATED_ARTIFACTS, MANIFEST_PATH)],
+        "task_dep": ["build_panel"],
     }
 
 
@@ -124,12 +189,13 @@ def task_run_notebook():
         "actions": [_run_notebook],
         "file_dep": [
             str(PANEL_PATH),
-            str(SETTINGS.reports_dir / "build" / "artifact_manifest.json"),
+            str(MANIFEST_PATH),
         ],
         "targets": [
             str(SETTINGS.output_dir / "01_cay_replication_tour.ipynb"),
             str(SETTINGS.output_dir / "01_cay_replication_tour.html"),
         ],
+        "task_dep": ["generate_exhibits"],
     }
 
 
@@ -137,8 +203,14 @@ def task_compile_report():
     """Compile LaTeX and persist the build log."""
     return {
         "actions": [(compile_latex_report, [SETTINGS.reports_dir])],
-        "file_dep": [str(SETTINGS.reports_dir / "build" / "artifact_manifest.json")],
-        "targets": [str(SETTINGS.reports_dir / "build" / "main.pdf")],
+        "file_dep": [
+            str(path) for path in (*GENERATED_ARTIFACTS, MANIFEST_PATH, *REPORT_SOURCES)
+        ],
+        "targets": [
+            str(SETTINGS.reports_dir / "build" / "main.pdf"),
+            str(SETTINGS.reports_dir / "build" / "latex_build.log"),
+        ],
+        "task_dep": ["generate_exhibits"],
     }
 
 
@@ -156,15 +228,21 @@ def task_run_tests():
 
 def task_bootstrap_real_data():
     """Run credentialed acquisition and complete analysis."""
+
+    def bootstrap_and_mark_complete():
+        bootstrap_real_data(SETTINGS)
+        BOOTSTRAP_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        BOOTSTRAP_MARKER.write_text(f"completed through {SETTINGS.end_date}\n")
+
     return {
-        "actions": [(bootstrap_real_data, [SETTINGS])],
-        "targets": [str(SETTINGS.reports_dir / "build" / "artifact_manifest.json")],
+        "actions": [bootstrap_and_mark_complete],
+        "targets": [str(BOOTSTRAP_MARKER)],
     }
 
 
 DOIT_CONFIG = {
     "default_tasks": [
-        "bootstrap_real_data",
+        "generate_exhibits",
         "run_notebook",
         "compile_report",
         "run_tests",

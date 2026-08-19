@@ -80,33 +80,43 @@ def test_replication_status_uses_worst_check(tmp_path: Path):
 
 def test_artifact_manifest_hashes_dependencies_and_rejects_stale(tmp_path: Path):
     copy_schemas(tmp_path)
-    dependency = tmp_path / "source.txt"
+    dependencies = [
+        tmp_path / "core_quarterly.parquet",
+        tmp_path / "core_quarterly.metadata.json",
+        tmp_path / "captions.yml",
+    ]
     artifact = tmp_path / "table.csv"
-    dependency.write_text("source", encoding="utf-8")
+    for dependency in dependencies:
+        dependency.write_text("source", encoding="utf-8")
+        os.utime(dependency, (1, 1))
     artifact.write_text("result", encoding="utf-8")
-    os.utime(dependency, (1, 1))
     os.utime(artifact, (2, 2))
     output = tmp_path / "manifest.json"
 
     write_artifact_manifest(
         {"table": artifact},
-        {"table": [dependency]},
+        {"table": dependencies},
         output,
         tmp_path / "schemas" / "artifact_manifest.schema.json",
         git_commit="abc123",
     )
     manifest = json.loads(output.read_text(encoding="utf-8"))
     assert len(manifest["artifacts"][0]["sha256"]) == 64
+    assert manifest["artifacts"][0]["source_dependencies"] == [
+        str(path) for path in dependencies
+    ]
 
-    os.utime(dependency, (3, 3))
-    with pytest.raises(ValueError, match="stale"):
-        write_artifact_manifest(
-            {"table": artifact},
-            {"table": [dependency]},
-            output,
-            tmp_path / "schemas" / "artifact_manifest.schema.json",
-            git_commit="abc123",
-        )
+    for dependency in dependencies:
+        os.utime(dependency, (3, 3))
+        with pytest.raises(ValueError, match="stale"):
+            write_artifact_manifest(
+                {"table": artifact},
+                {"table": dependencies},
+                output,
+                tmp_path / "schemas" / "artifact_manifest.schema.json",
+                git_commit="abc123",
+            )
+        os.utime(dependency, (1, 1))
 
 
 def test_missing_latexmk_writes_actionable_log(tmp_path: Path, monkeypatch):

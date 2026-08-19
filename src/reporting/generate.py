@@ -17,7 +17,13 @@ from src.analysis.figure_s1 import plot_figure_s1, prepare_figure_s1
 from src.analysis.modes import estimate_analysis_modes
 from src.analysis.table_ii import TableIIResult, build_table_ii
 from src.analysis.table_iii import build_table_iii
-from src.analysis.table_r1 import build_table_r1, load_paper_targets
+from src.analysis.table_r1 import (
+    FAIL_REQUIRES_DIAGNOSIS,
+    PASS_REVISED_VINTAGE,
+    PASS_STRICT,
+    build_table_r1,
+    load_paper_targets,
+)
 from src.analysis.table_s1 import TableS1Result, build_table_s1
 from src.analysis.table_vi import build_table_vi
 from src.data.build_quarterly_panel import HISTORICAL_INDEX, latest_common_quarter
@@ -69,6 +75,79 @@ def _caption_labels(reports_dir: Path) -> dict[str, str]:
     return {artifact_id: entry["label"] for artifact_id, entry in entries.items()}
 
 
+def _table_sample_text(frame: pd.DataFrame, unit: str) -> str:
+    starts = sorted(frame["sample_start"].dropna().astype(str).unique())
+    ends = sorted(frame["sample_end"].dropna().astype(str).unique())
+    if not starts or not ends:
+        raise ValueError(f"{unit.title()} results lack observed sample dates.")
+    sample = f"{starts[0]}--{ends[-1]}"
+    details = []
+    if len(starts) > 1:
+        details.append(f"starts {starts[0]}--{starts[-1]}")
+    if len(ends) > 1:
+        details.append(f"endpoints {ends[0]}--{ends[-1]}")
+    if details:
+        sample += f" ({unit}-specific {'; '.join(details)}; see table columns)"
+    return sample
+
+
+def _table_ii_takeaway(historical: TableIIResult, updated: TableIIResult) -> str:
+    predictors = ["dividend_yield", "payout_ratio", "relative_bill_rate", "cay"]
+    persistence = updated.summary.loc[predictors, "ar1"]
+    most_persistent = persistence.idxmax()
+    return (
+        f"{most_persistent} is the most persistent updated predictor "
+        f"(AR(1)={persistence[most_persistent]:.3f}). Updated cay has "
+        f"AR(1)={updated.summary.loc['cay', 'ar1']:.3f} and standard deviation "
+        f"{updated.summary.loc['cay', 'standard_deviation']:.3f}, versus "
+        f"{historical.summary.loc['cay', 'ar1']:.3f} and "
+        f"{historical.summary.loc['cay', 'standard_deviation']:.3f} historically."
+    )
+
+
+def _table_iii_takeaway(historical: pd.DataFrame, updated: pd.DataFrame) -> str:
+    def cay_result(frame: pd.DataFrame) -> pd.Series:
+        return frame.loc[(frame["row"] == 6) & (frame["term"] == "cay")].iloc[0]
+
+    old = cay_result(historical)
+    new = cay_result(updated)
+    return (
+        "For the univariate excess-return specification (row 6), the cay "
+        f"coefficient is {old['coefficient']:.3f} historically "
+        f"(t={old['t_statistic']:.2f}, adjusted R-squared={old['adjusted_r_squared']:.3f}) "
+        f"and {new['coefficient']:.3f} in the updated sample "
+        f"(t={new['t_statistic']:.2f}, adjusted R-squared={new['adjusted_r_squared']:.3f})."
+    )
+
+
+def _table_vi_takeaway(updated: pd.DataFrame) -> str:
+    cay_rows = updated.loc[
+        (updated["specification"] == 2) & (updated["term"] == "cay")
+    ].drop_duplicates("horizon")
+    consumption_rows = updated.loc[
+        (updated["specification"] == 1) & (updated["term"] == "cay")
+    ].drop_duplicates("horizon")
+    strongest_return = cay_rows.loc[cay_rows["adjusted_r_squared"].idxmax()]
+    strongest_consumption = consumption_rows.loc[
+        consumption_rows["adjusted_r_squared"].idxmax()
+    ]
+    return (
+        f"Updated cay has its strongest excess-return fit at {int(strongest_return['horizon'])} "
+        f"quarters (adjusted R-squared={strongest_return['adjusted_r_squared']:.3f}); "
+        f"the strongest consumption-growth fit is at {int(strongest_consumption['horizon'])} "
+        f"quarters (adjusted R-squared={strongest_consumption['adjusted_r_squared']:.3f})."
+    )
+
+
+def _audit_takeaway(audit: pd.DataFrame) -> str:
+    counts = audit["status"].value_counts()
+    return (
+        f"Audit counts are {int(counts.get(PASS_STRICT, 0))} strict, "
+        f"{int(counts.get(PASS_REVISED_VINTAGE, 0))} revised-vintage, and "
+        f"{int(counts.get(FAIL_REQUIRES_DIAGNOSIS, 0))} requiring diagnosis."
+    )
+
+
 def _write_table(
     frame: pd.DataFrame,
     reports_dir: Path,
@@ -90,6 +169,8 @@ def generate_report_artifacts(
     reports_dir: Path,
     targets_path: Path,
     *,
+    panel_path: Path,
+    panel_metadata_path: Path,
     data_vintage: str | None = None,
     git_commit: str = "UNKNOWN",
 ) -> list[Path]:
@@ -141,12 +222,17 @@ def generate_report_artifacts(
     ):
         artifacts.extend(_write_table(frame, reports_dir, artifact_id, labels))
 
-    figure_inputs = {
-        "figure_1_replication": plot_figure_1(prepare_figure_1(historical)),
-        "figure_1_updated": plot_figure_1(prepare_figure_1(updated)),
-        "figure_s1_data_anatomy": plot_figure_s1(prepare_figure_s1(updated)),
+    figure_data = {
+        "figure_1_replication": prepare_figure_1(historical),
+        "figure_1_updated": prepare_figure_1(updated),
+        "figure_s1_data_anatomy": prepare_figure_s1(updated),
     }
-    for artifact_id, figure in figure_inputs.items():
+    for artifact_id, data in figure_data.items():
+        figure = (
+            plot_figure_s1(data)
+            if artifact_id == "figure_s1_data_anatomy"
+            else plot_figure_1(data)
+        )
         paths = write_figure_artifacts(
             figure,
             reports_dir / "figures",
@@ -178,27 +264,47 @@ def generate_report_artifacts(
     comparison_path = reports_dir / "build" / "current_vintage_cay_comparison.csv"
     modes.historical_comparison.to_csv(comparison_path)
 
-    sample_dates = {}
-    for artifact_id in labels:
-        if artifact_id.endswith("_updated"):
-            sample_dates[artifact_id] = (str(updated.index.min()), str(updated_end))
-        elif artifact_id in {"table_s1_core_data_summary", "figure_s1_data_anatomy"}:
-            sample_dates[artifact_id] = (
-                str(updated.index.min()),
-                str(updated.index.max()),
-            )
-        else:
-            sample_dates[artifact_id] = ("1952Q4", "1998Q3")
+    sample_dates: dict[str, tuple[str, str] | str] = {
+        "table_ii_replication": (
+            str(table_ii_historical.sample_start),
+            str(table_ii_historical.sample_end),
+        ),
+        "table_ii_updated": (
+            str(table_ii_updated.sample_start),
+            str(table_ii_updated.sample_end),
+        ),
+        "table_iii_replication": _table_sample_text(table_iii_historical, "row"),
+        "table_iii_updated": _table_sample_text(table_iii_updated, "row"),
+        "table_vi_replication": _table_sample_text(table_vi_historical, "horizon"),
+        "table_vi_updated": _table_sample_text(table_vi_updated, "horizon"),
+        "table_s1_core_data_summary": _table_sample_text(
+            table_s1.coverage.rename(
+                columns={
+                    "first_quarter": "sample_start",
+                    "last_quarter": "sample_end",
+                }
+            ),
+            "variable",
+        ),
+        "table_r1_replication_audit": ("1952Q4", "1998Q3"),
+        **{
+            artifact_id: (str(data.index.min()), str(data.index.max()))
+            for artifact_id, data in figure_data.items()
+        },
+    }
     calculated_takeaways = {
-        "table_ii_updated": "Updated persistence and dispersion are calculated in the table.",
-        "figure_1_updated": "Displayed co-movement is descriptive; forecasting tables provide formal evidence.",
-        "table_iii_updated": "Updated coefficient precision is reported separately from replication quality.",
-        "table_vi_updated": "The strongest updated horizon is identified from calculated adjusted R-squared values.",
+        "table_ii_updated": _table_ii_takeaway(table_ii_historical, table_ii_updated),
+        "figure_1_updated": (
+            "The updated displayed-sample contemporaneous cay-return correlation is "
+            f"{figure_data['figure_1_updated']['cay'].corr(figure_data['figure_1_updated']['sp_excess_return']):.3f}; "
+            "forecasting evidence is reported in Tables III and VI."
+        ),
+        "table_iii_updated": _table_iii_takeaway(
+            table_iii_historical, table_iii_updated
+        ),
+        "table_vi_updated": _table_vi_takeaway(table_vi_updated),
         "table_s1_core_data_summary": table_s1.takeaway,
-        "table_r1_replication_audit": audit["status"]
-        .value_counts()
-        .to_dict()
-        .__str__(),
+        "table_r1_replication_audit": _audit_takeaway(audit),
     }
     captions_tex = write_caption_macros(
         reports_dir / "captions.yml",
@@ -218,7 +324,14 @@ def generate_report_artifacts(
         ]
     )
 
-    source_dependencies = [reports_dir / "report_contract.yml", targets_path]
+    source_dependencies = [
+        panel_path,
+        panel_metadata_path,
+        reports_dir / "captions.yml",
+        targets_path,
+        reports_dir / "report_contract.yml",
+        reports_dir / "report_config.yml",
+    ]
     artifact_map = {
         f"artifact_{index:02d}": path for index, path in enumerate(artifacts, start=1)
     }

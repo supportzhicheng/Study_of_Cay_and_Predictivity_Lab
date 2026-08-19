@@ -41,36 +41,37 @@ def test_labor_tax_allocation_formula():
 
 
 def test_core_macro_uses_declared_consumption_and_labor_formulas():
-    index = pd.period_range("2000Q1", periods=1, freq="Q")
+    index = pd.period_range("2000Q1", periods=2, freq="Q")
     bea = pd.DataFrame(
         {
-            "nondurable_goods": [60.0],
-            "services": [50.0],
-            "clothing_footwear": [10.0],
-            "wages": [50.0],
-            "transfers": [10.0],
-            "supplements": [10.0],
-            "social_insurance": [5.0],
-            "personal_taxes": [20.0],
-            "proprietors_income": [10.0],
-            "rental_income": [10.0],
-            "dividend_income": [20.0],
-            "interest_income": [10.0],
+            "nondurable_goods": [60.0, 60.0],
+            "services": [50.0, 50.0],
+            "clothing_footwear": [10.0, 10.0],
+            "wages": [50.0, 50.0],
+            "transfers": [10.0, 10.0],
+            "supplements": [10.0, 10.0],
+            "social_insurance": [5.0, 5.0],
+            "personal_taxes": [20.0, 20.0],
+            "proprietors_income": [10.0, 10.0],
+            "rental_income": [10.0, 10.0],
+            "dividend_income": [20.0, 20.0],
+            "interest_income": [10.0, 10.0],
         },
         index=index,
     )
     fred = pd.DataFrame(
         {
-            "household_net_worth": [1000.0],
-            "pce_price_index": [2.0],
-            "population_candidate": [10.0],
+            "household_net_worth": [1000.0, 1000.0],
+            "pce_price_index": [100.0, 200.0],
+            "population_candidate": [10.0, 10.0],
         },
         index=index,
     )
 
     result = build_core_macro(bea, fred)
 
-    np.testing.assert_allclose(result.loc[index[0]], np.log([10.0, 50.0, 2.75]))
+    np.testing.assert_allclose(result.loc[index[0]], np.log([10.0, 100.0, 5.5]))
+    np.testing.assert_allclose(result.loc[index[1]], np.log([10.0, 50.0, 2.75]))
 
 
 def test_core_macro_rejects_nonpositive_real_levels():
@@ -95,7 +96,7 @@ def test_core_macro_rejects_nonpositive_real_levels():
     fred = pd.DataFrame(
         {
             "household_net_worth": [100.0],
-            "pce_price_index": [1.0],
+            "pce_price_index": [100.0],
             "population_candidate": [10.0],
         },
         index=index,

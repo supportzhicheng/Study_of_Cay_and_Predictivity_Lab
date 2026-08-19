@@ -18,7 +18,7 @@ def write_caption_macros(
     captions_path: Path,
     output_path: Path,
     *,
-    sample_dates: Mapping[str, tuple[str, str]],
+    sample_dates: Mapping[str, tuple[str, str] | str],
     data_vintage: str,
     calculated_takeaways: Mapping[str, str],
 ) -> Path:
@@ -35,13 +35,14 @@ def write_caption_macros(
             )
         if artifact_id not in sample_dates:
             raise ValueError(f"Caption '{artifact_id}' lacks generated sample dates.")
-        start, end = sample_dates[artifact_id]
+        sample = sample_dates[artifact_id]
+        sample_text = sample if isinstance(sample, str) else "--".join(sample)
         source = entry.get(
             "source", "Generated from the normalized core quarterly panel"
         )
         notes = "; ".join(entry.get("notes_required", []))
         caption = (
-            f"{title}. Sample: {start}--{end}. {notes}. "
+            f"{title}. Sample: {sample_text}. {notes}. "
             f"Data vintage: {data_vintage}. Source: {source}. {takeaway}"
         )
         caption = re.sub(r"\s+", " ", caption).replace("%", r"\%").replace("_", r"\_")

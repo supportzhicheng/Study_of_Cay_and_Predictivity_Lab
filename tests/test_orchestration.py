@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import dodo
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -42,3 +44,42 @@ def test_doit_lists_required_core_tasks():
         "bootstrap_real_data",
     ):
         assert task in completed.stdout
+
+
+def test_doit_targets_have_one_owner_and_required_edges():
+    tasks = {
+        "build_panel": dodo.task_build_panel(),
+        "generate_exhibits": dodo.task_generate_exhibits(),
+        "run_notebook": dodo.task_run_notebook(),
+        "compile_report": dodo.task_compile_report(),
+        "run_tests": dodo.task_run_tests(),
+        "bootstrap_real_data": dodo.task_bootstrap_real_data(),
+    }
+    owners: dict[str, str] = {}
+    for task_name, task in tasks.items():
+        for target in task.get("targets", []):
+            assert target not in owners, (
+                f"{target} owned by {owners[target]} and {task_name}"
+            )
+            owners[target] = task_name
+
+    assert len(tasks["build_panel"]["targets"]) == 2
+    assert len(tasks["generate_exhibits"]["targets"]) == 32
+    assert tasks["generate_exhibits"]["task_dep"] == ["build_panel"]
+    assert tasks["run_notebook"]["task_dep"] == ["generate_exhibits"]
+    assert tasks["compile_report"]["task_dep"] == ["generate_exhibits"]
+
+    exhibit_dependencies = set(tasks["generate_exhibits"]["file_dep"])
+    for path in (
+        dodo.PANEL_PATH,
+        dodo.PANEL_METADATA_PATH,
+        dodo.TARGETS_PATH,
+        dodo.SETTINGS.reports_dir / "captions.yml",
+        dodo.SETTINGS.reports_dir / "report_config.yml",
+    ):
+        assert str(path) in exhibit_dependencies
+
+    report_dependencies = set(tasks["compile_report"]["file_dep"])
+    assert {str(path) for path in dodo.REPORT_SOURCES} <= report_dependencies
+    assert {str(path) for path in dodo.GENERATED_ARTIFACTS} <= report_dependencies
+    assert tasks["bootstrap_real_data"]["targets"] == [str(dodo.BOOTSTRAP_MARKER)]

@@ -77,6 +77,10 @@ def generate_exhibits(settings: Settings) -> list[Path]:
         panel,
         settings.reports_dir,
         settings.project_root / "config" / "paper_targets.yml",
+        panel_path=panel_path,
+        panel_metadata_path=(
+            settings.data_dir / "processed" / "core_quarterly.metadata.json"
+        ),
         data_vintage=settings.end_date,
         git_commit=_git_commit(settings.project_root),
     )

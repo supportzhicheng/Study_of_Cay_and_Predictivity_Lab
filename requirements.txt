@@ -21,3 +21,4 @@ PyYAML>=6
 requests>=2.31
 wrds>=3.2
 xlrd>=2.0
+latexmk

@@ -54,6 +54,7 @@ def allocate_labor_taxes(frame: pd.DataFrame) -> pd.Series:
 def build_core_macro(bea: pd.DataFrame, fred: pd.DataFrame) -> pd.DataFrame:
     """Construct log real per-capita consumption, wealth, and labor income."""
     labor_taxes = allocate_labor_taxes(bea)
+    # BEA T20306 consumption is already in chained dollars; income and wealth are nominal.
     consumption = bea["nondurable_goods"] + bea["services"] - bea["clothing_footwear"]
     labor_income = (
         bea["wages"]
@@ -72,16 +73,13 @@ def build_core_macro(bea: pd.DataFrame, fred: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     real_levels = pd.DataFrame(index=joined.index)
+    pce_deflator = joined["pce_price_index"] / 100.0
     real_levels["c"] = joined["consumption"] / joined["population_candidate"]
     real_levels["a"] = (
-        joined["household_net_worth"]
-        / joined["pce_price_index"]
-        / joined["population_candidate"]
+        joined["household_net_worth"] / pce_deflator / joined["population_candidate"]
     )
     real_levels["y"] = (
-        joined["labor_income"]
-        / joined["pce_price_index"]
-        / joined["population_candidate"]
+        joined["labor_income"] / pce_deflator / joined["population_candidate"]
     )
     if (real_levels <= 0).any().any():
         raise ValueError("Real per-capita macro levels must be positive.")
