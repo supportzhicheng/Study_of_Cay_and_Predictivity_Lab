@@ -180,6 +180,81 @@ If you are new to the repo, follow this exact sequence:
 
 ---
 
+## Running the regional extension pipeline
+
+The `cay_components_region` dataset goes through the same staged pipeline
+structure as the core replication workflow
+(`acquire → normalise → panel → analysis → report`).
+
+### Replication-only mode
+
+```bash
+# Core replication (unchanged)
+doit panel
+doit generate_exhibits
+```
+
+### Extension pipeline (staged)
+
+```bash
+# Stage 1 – import and normalise the region-proxy CSV
+doit -f cay_lab/dodo.py import_region_data
+
+# Stage 2 – build the predictivity panel
+doit -f cay_lab/dodo.py build_extension_panel
+
+# Stage 3 – run analysis and produce chartbook + CSV artifacts
+doit -f cay_lab/dodo.py generate_extension_exhibits
+
+# Stage 4 – write combined replication + extension LaTeX section
+doit -f cay_lab/dodo.py generate_combined_report
+```
+
+Or run all extension stages at once:
+
+```bash
+doit -f cay_lab/dodo.py
+```
+
+### Combined report (replication + extension)
+
+After running both workflows the report section at
+`cay_lab/output/reports/combined_replication_extension.tex` includes both
+replication and extension results.  The main paper already has a placeholder
+section (`reports/paper/sections/08_extension.tex`); the combined section can
+be included in the LaTeX document as needed.
+
+**Key extension outputs** (relative to `cay_lab/output/`):
+| File | Description |
+|---|---|
+| `region_proxy_normalised.parquet` | Normalised region-proxy panel (Stage 1) |
+| `extension_panel.parquet` | Model-ready predictivity dataset (Stage 2) |
+| `extension_prepared.csv` | Same as above, CSV mirror |
+| `extension_rolling.csv` | Rolling forecast results per region |
+| `extension_chartbook.pdf` | Per-region chartbook (actual vs predicted, t-stats, R²) |
+| `extension_qa.json` | QA / provenance metadata |
+| `reports/combined_replication_extension.tex` | Combined LaTeX section |
+
+### Python API
+
+```python
+from cay_lab.pipeline import (
+    import_region_data,
+    build_extension_panel,
+    generate_extension_exhibits,
+    generate_combined_report,
+)
+from cay_lab.settings import load_extension_settings
+
+settings = load_extension_settings(train_periods=40)
+import_region_data(settings)
+build_extension_panel(settings)
+generate_extension_exhibits(settings)
+generate_combined_report(settings)
+```
+
+---
+
 ## Data Guide (for decomposition extension)
 
 All extension data lives in `cay_data/`.
