@@ -43,8 +43,7 @@ EXTENSION_INPUT_DIR=/absolute/path/to/pinned-source-bundle
 ```
 
 The required files, coverage, units, cache paths, and SHA-256 values are listed
-in `config/extension_sources.yml`. Exact Section 9 reproduction requires the
-pinned QQQ cache documented in `docs/BASELINE_BUNDLE_STATUS.md`.
+in `config/extension_sources.yml`.
 
 ## Workflow
 
