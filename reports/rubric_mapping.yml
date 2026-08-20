@@ -36,7 +36,7 @@ report_layer:
     evidence:
     - tables/table_s1_core_data_summary.tex
     - figures/figure_s1_data_anatomy.pdf
-    - captions.yml
+    - report_contract.yml
   automatic_table_statistics:
     points: 4
     status: enforced_by_contract

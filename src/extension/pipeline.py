@@ -33,7 +33,7 @@ REGION_NORMALIZED_STEM = "region_proxy_normalised"
 def import_region_data(settings: Settings) -> Path:
     """Validate and persist the region-proxy CSV as a normalised parquet.
 
-    Loads ``cay_components_region_ca_il_tx_q_proxy.csv`` from ``cay_data/``,
+    Loads ``cay_components_region_ca_il_tx_q_proxy.csv`` from the normalized extension data root,
     validates required columns, and writes a parquet cache plus a JSON sidecar
     with basic provenance metadata.
 
@@ -43,7 +43,7 @@ def import_region_data(settings: Settings) -> Path:
 
     raw_df = load_cay_decomposition(
         dataset=REGION_DATASET,
-        cay_data_dir=settings.extension_data_dir,
+        component_data_dir=settings.extension_data_dir,
         dropna_components=False,
     )
 

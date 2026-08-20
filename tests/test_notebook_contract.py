@@ -40,9 +40,9 @@ def test_notebook_alternates_cells_and_executes_from_generated_artifacts(
     processed_dir = tmp_path / "_data" / "processed"
     processed_dir.mkdir(parents=True)
     panel.to_parquet(processed_dir / "core_quarterly.parquet")
-    pd.DataFrame(
-        {"cay_current_vintage": np.sin(values)}, index=index
-    ).to_csv(reports_dir / "build" / "current_vintage_cay_comparison.csv")
+    pd.DataFrame({"cay_current_vintage": np.sin(values)}, index=index).to_csv(
+        reports_dir / "build" / "current_vintage_cay_comparison.csv"
+    )
     pd.DataFrame({"metric": ["fixture"], "status": ["PASS_STRICT"]}).to_csv(
         reports_dir / "tables" / "table_r1_replication_audit.csv", index=False
     )

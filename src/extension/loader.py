@@ -3,7 +3,7 @@
 Provides helpers to:
 - Load raw quarterly series (consumption, asset wealth, labour income,
   excess stock returns) from CSV or pandas DataFrames.
-- Load decomposition data from ``cay_data/``.
+- Load decomposition data from the normalized extension data root.
 - Build cleaned predictivity datasets with user-defined train length and
   prediction horizon.
 - Apply standard log-transformations and de-trending.
@@ -26,7 +26,7 @@ COL_Y = "y"  # log real labour income per capita
 COL_ER = "er"  # excess log stock return (e.g., annual or quarterly)
 
 COMPONENTS = ("housing", "financial", "liquid")
-_DEFAULT_CAY_DATA_DIR = (
+_DEFAULT_COMPONENT_DATA_DIR = (
     Path(__file__).resolve().parents[2] / "_data" / "normalized" / "extension"
 )
 _DATASET_FILE_MAP = {
@@ -62,20 +62,20 @@ def load_from_csv(path: str, date_col: str = "date", **kwargs) -> pd.DataFrame:
 
 def load_cay_decomposition(
     dataset: str = "households_and_nonprofits",
-    cay_data_dir: str | Path | None = None,
+    component_data_dir: str | Path | None = None,
     start: str | None = None,
     end: str | None = None,
     dropna_components: bool = True,
 ) -> pd.DataFrame:
-    """Load one decomposition panel from ``cay_data/``.
+    """Load one decomposition panel from the normalized extension data root.
 
     Parameters
     ----------
     dataset:
         One of ``households``, ``households_and_nonprofits``,
         ``wealth_groups``, ``region_proxy``.
-    cay_data_dir:
-        Folder containing decomposition files. Defaults to repo ``cay_data/``.
+    component_data_dir:
+        Folder containing decomposition files. Defaults to the normalized extension data root.
     start, end:
         Optional quarter boundaries (e.g., ``"1989Q3"``).
     dropna_components:
@@ -90,15 +90,19 @@ def load_cay_decomposition(
         valid = ", ".join(sorted(_DATASET_FILE_MAP))
         raise ValueError(f"Unknown dataset '{dataset}'. Valid options: {valid}")
 
-    data_dir = Path(cay_data_dir) if cay_data_dir is not None else _DEFAULT_CAY_DATA_DIR
+    data_dir = (
+        Path(component_data_dir)
+        if component_data_dir is not None
+        else _DEFAULT_COMPONENT_DATA_DIR
+    )
     file_path = data_dir / _DATASET_FILE_MAP[dataset]
     if not file_path.exists():
         raise FileNotFoundError(
             "Decomposition file not found: "
             f"{file_path}. This repository does not ship real decomposition "
             "datasets; generate local files with your own data credentials "
-            "(for example via cay_data/build_components_from_s14.py and "
-            "cay_data/build_extension_data.py)."
+            "(for example via "
+            "the root extension preparation workflow)."
         )
 
     df = pd.read_csv(file_path)
@@ -137,7 +141,7 @@ def prepare_predictivity_dataset(
     target_component: str = "financial",
     components: tuple[str, ...] = COMPONENTS,
     min_history_periods: int = 8,
-    cay_data_dir: str | Path | None = None,
+    component_data_dir: str | Path | None = None,
     start: str | None = None,
     end: str | None = None,
 ) -> pd.DataFrame:
@@ -162,7 +166,7 @@ def prepare_predictivity_dataset(
         Components used as predictors.
     min_history_periods:
         Minimum history for the expanding-mean sub-cay transform.
-    cay_data_dir, start, end:
+    component_data_dir, start, end:
         Passed to :func:`load_cay_decomposition`.
 
     Returns
@@ -182,7 +186,7 @@ def prepare_predictivity_dataset(
 
     panel = load_cay_decomposition(
         dataset=dataset,
-        cay_data_dir=cay_data_dir,
+        component_data_dir=component_data_dir,
         start=start,
         end=end,
         dropna_components=False,

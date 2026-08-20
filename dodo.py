@@ -498,7 +498,7 @@ def _run_extension_section9_chartbook() -> None:
         min_history_periods=2,
         risky_ticker="QQQ",
         output_dir=str(SECTION9_CHARTBOOK_OUTPUT_DIR),
-        cay_data_dir=str(SETTINGS.extension_normalized_dir),
+        component_data_dir=str(SETTINGS.extension_normalized_dir),
         market_data_dir=str(SETTINGS.extension_raw_dir / "market"),
     )
     write_section9_manifest(

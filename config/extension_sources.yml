@@ -3,8 +3,8 @@ tracked_raw_root: _data/raw/extension
 acquisition_modes: [baseline, latest]
 status: baseline_requires_verified_local_bundle
 notes:
-  - Keep cay_data/raw tracked until the extension-source gate in docs/WORKFLOW_CONVERGENCE_PLAN.md passes.
-  - The tracked hashes below pin the current repository snapshots while immutable acquisition paths and ALFRED vintages are documented.
+  - Provider bytes are ignored; baseline mode imports matching files from EXTENSION_INPUT_DIR.
+  - Latest mode writes revised provider caches without changing these baseline hashes.
 sources:
   z1_s14_b:
     provider: Federal Reserve Z.1

@@ -71,7 +71,7 @@ def test_log_transform_applies_log():
 def test_load_cay_decomposition_wealth_groups(wealth_group_data):
     df = load_cay_decomposition(
         dataset="wealth_groups",
-        cay_data_dir=wealth_group_data,
+        component_data_dir=wealth_group_data,
         start="1990Q1",
         end="1991Q4",
     )
@@ -84,7 +84,7 @@ def test_load_cay_decomposition_wealth_groups(wealth_group_data):
 def test_prepare_predictivity_dataset_has_subcay_and_target(wealth_group_data):
     df = prepare_predictivity_dataset(
         dataset="wealth_groups",
-        cay_data_dir=wealth_group_data,
+        component_data_dir=wealth_group_data,
         train_periods=20,
         prediction_window=1,
         min_history_periods=4,

@@ -273,7 +273,7 @@ def build_chartbook(
     risky_ticker: str = "",
     risky_tickers: str = "",
     risky_data_source: str = "stooq",
-    cay_data_dir: str = str(PROJECT_ROOT / "cay_data"),
+    component_data_dir: str = str(PROJECT_ROOT / "_data" / "normalized" / "extension"),
     market_data_dir: str = str(PROJECT_ROOT / "_data" / "raw" / "extension" / "market"),
 ) -> None:
     """Create model outputs and a PDF chartbook for sub-cay predictivity."""
@@ -294,7 +294,7 @@ def build_chartbook(
 
     prepared = prepare_predictivity_dataset(
         dataset=dataset_key,
-        cay_data_dir=cay_data_dir,
+        component_data_dir=component_data_dir,
         train_periods=train_periods,
         prediction_window=prediction_window,
         target_component=target_component,
