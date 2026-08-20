@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from shutil import copy2
 from pathlib import Path
 
 from src.bootstrap_real_data import bootstrap_real_data
@@ -15,12 +16,59 @@ from src.pipeline import build_panel, generate_exhibits
 from src.reporting.latex import compile_latex_report
 from src.settings import load_settings
 
+from cay_lab.dodo import build_chartbook
+from cay_lab.pipeline import (
+    PANEL_STEM as EXTENSION_PANEL_STEM,
+    REGION_NORMALIZED_STEM,
+    build_extension_panel,
+    generate_combined_report,
+    generate_extension_exhibits,
+    import_region_data,
+)
+from cay_lab.settings import load_extension_settings
+
 SETTINGS = load_settings([])
+EXTENSION_SETTINGS = load_extension_settings()
 PANEL_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.parquet"
 PANEL_METADATA_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.metadata.json"
 MANIFEST_PATH = SETTINGS.reports_dir / "build" / "artifact_manifest.json"
 BOOTSTRAP_MARKER = SETTINGS.output_dir / "bootstrap_real_data.complete"
 TARGETS_PATH = SETTINGS.project_root / "config" / "paper_targets.yml"
+EXTENSION_REGION_SOURCE_CSV = (
+    EXTENSION_SETTINGS.cay_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
+)
+EXTENSION_REGION_NORMALIZED_PARQUET = (
+    EXTENSION_SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+)
+EXTENSION_REGION_NORMALIZED_META = (
+    EXTENSION_SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+)
+EXTENSION_PANEL_PARQUET = EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.parquet"
+EXTENSION_PANEL_META = (
+    EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.metadata.json"
+)
+EXTENSION_REPORT_TEX = (
+    EXTENSION_SETTINGS.reports_dir / "combined_replication_extension.tex"
+)
+EXTENSION_EXHIBIT_ARTIFACTS = (
+    EXTENSION_SETTINGS.output_dir / "extension_prepared.csv",
+    EXTENSION_SETTINGS.output_dir / "extension_rolling.csv",
+    EXTENSION_SETTINGS.output_dir / "extension_chartbook.pdf",
+    EXTENSION_SETTINGS.output_dir / "extension_qa.json",
+)
+SECTION9_CHARTBOOK_OUTPUT_DIR = (
+    EXTENSION_SETTINGS.project_root
+    / "cay_lab"
+    / "output"
+    / "examples"
+    / "wealth_groups_2023Q1_2026Q1_h2_QQQ_train8"
+)
+SECTION9_CHARTBOOK_TARGETS = (
+    SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_prepared.csv",
+    SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_tests.csv",
+    SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_rolling.csv",
+    SECTION9_CHARTBOOK_OUTPUT_DIR / "chartbook_subcay_predictivity.pdf",
+)
 
 TABLE_IDS = (
     "table_ii_replication",
@@ -243,7 +291,9 @@ def task_compile_report():
     """Compile LaTeX and persist the build log."""
 
     def compile_report():
-        compile_latex_report(SETTINGS.reports_dir)
+        main_pdf = compile_latex_report(SETTINGS.reports_dir)
+        test_pdf = SETTINGS.reports_dir / "build" / "test_main.pdf"
+        copy2(main_pdf, test_pdf)
 
     return {
         "actions": [compile_report],
@@ -252,9 +302,14 @@ def task_compile_report():
         ],
         "targets": [
             str(SETTINGS.reports_dir / "build" / "main.pdf"),
+            str(SETTINGS.reports_dir / "build" / "test_main.pdf"),
             str(SETTINGS.reports_dir / "build" / "latex_build.log"),
         ],
-        "task_dep": ["generate_exhibits"],
+        "task_dep": [
+            "generate_exhibits",
+            "extension_generate_combined_report",
+            "cay_lab_section9_chartbook",
+        ],
     }
 
 
@@ -278,6 +333,112 @@ def task_bootstrap_real_data():
     return {
         "actions": [bootstrap_and_mark_complete],
         "targets": [str(BOOTSTRAP_MARKER)],
+    }
+
+
+def _build_extension_input_data() -> None:
+    subprocess.run(
+        [str(Path(sys.executable)), "cay_data/build_components_from_s14.py"],
+        check=True,
+    )
+    subprocess.run(
+        [str(Path(sys.executable)), "cay_data/build_extension_data.py"],
+        check=True,
+    )
+
+
+def task_extension_build_input_data():
+    """Build local extension decomposition CSV inputs under cay_data/."""
+    return {
+        "actions": [_build_extension_input_data],
+        "task_dep": ["config"],
+        "targets": [
+            str(EXTENSION_SETTINGS.cay_data_dir / "cay_components_households_q.csv"),
+            str(EXTENSION_SETTINGS.cay_data_dir / "cay_components_hnpo_q.csv"),
+            str(EXTENSION_SETTINGS.cay_data_dir / "cay_components_wealth_groups_q.csv"),
+            str(EXTENSION_REGION_SOURCE_CSV),
+        ],
+    }
+
+
+def _run_extension_import_region_data() -> None:
+    import_region_data(EXTENSION_SETTINGS)
+
+
+def task_extension_import_region_data():
+    """Stage 1: validate and normalise the extension region-proxy CSV."""
+    return {
+        "actions": [_run_extension_import_region_data],
+        "file_dep": [str(EXTENSION_REGION_SOURCE_CSV)],
+        "targets": [
+            str(EXTENSION_REGION_NORMALIZED_PARQUET),
+            str(EXTENSION_REGION_NORMALIZED_META),
+        ],
+        "task_dep": ["extension_build_input_data"],
+    }
+
+
+def _run_extension_build_panel() -> None:
+    build_extension_panel(EXTENSION_SETTINGS)
+
+
+def task_extension_build_panel():
+    """Stage 2: build the extension predictivity panel."""
+    return {
+        "actions": [_run_extension_build_panel],
+        "file_dep": [str(EXTENSION_REGION_NORMALIZED_PARQUET)],
+        "targets": [str(EXTENSION_PANEL_PARQUET), str(EXTENSION_PANEL_META)],
+        "task_dep": ["extension_import_region_data"],
+    }
+
+
+def _run_extension_generate_exhibits() -> None:
+    generate_extension_exhibits(EXTENSION_SETTINGS)
+
+
+def task_extension_generate_exhibits():
+    """Stage 3: generate extension chartbook/CSV/QA artifacts."""
+    return {
+        "actions": [_run_extension_generate_exhibits],
+        "file_dep": [str(EXTENSION_PANEL_PARQUET)],
+        "targets": [str(path) for path in EXTENSION_EXHIBIT_ARTIFACTS],
+        "task_dep": ["extension_build_panel"],
+    }
+
+
+def _run_extension_generate_combined_report() -> None:
+    generate_combined_report(EXTENSION_SETTINGS)
+
+
+def task_extension_generate_combined_report():
+    """Stage 4: generate the extension LaTeX section used by Section 8."""
+    return {
+        "actions": [_run_extension_generate_combined_report],
+        "file_dep": [str(EXTENSION_SETTINGS.output_dir / "extension_qa.json")],
+        "targets": [str(EXTENSION_REPORT_TEX)],
+        "task_dep": ["extension_generate_exhibits"],
+    }
+
+
+def _run_cay_lab_section9_chartbook() -> None:
+    build_chartbook(
+        cay_decomposition="house_wealth_groups",
+        input_start="2023Q1",
+        input_end="2026Q1",
+        prediction_period=2,
+        train_periods=8,
+        min_history_periods=2,
+        risky_ticker="QQQ",
+        output_dir=str(SECTION9_CHARTBOOK_OUTPUT_DIR),
+    )
+
+
+def task_cay_lab_section9_chartbook():
+    """Generate Section 9 worked-example CAY Lab chartbook artifacts."""
+    return {
+        "actions": [_run_cay_lab_section9_chartbook],
+        "targets": [str(path) for path in SECTION9_CHARTBOOK_TARGETS],
+        "task_dep": ["extension_build_input_data"],
     }
 
 
