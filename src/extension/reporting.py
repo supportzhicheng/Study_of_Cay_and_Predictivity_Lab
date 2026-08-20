@@ -294,44 +294,34 @@ def write_extension_report_section(
     status_counts = qa.get("status_counts", {})
     status_str = "; ".join(f"{k}: {v}" for k, v in sorted(status_counts.items()))
 
-    core_panel_candidates = (
-        settings.project_root / "_data" / "processed" / "core_quarterly.parquet",
-        settings.project_root / "data" / "processed" / "core_quarterly.parquet",
-    )
-    core_panel_path = next(
-        (p for p in core_panel_candidates if p.exists()), core_panel_candidates[0]
-    )
+    core_panel_path = settings.data_dir / "processed" / "core_quarterly.parquet"
+    if not core_panel_path.exists():
+        raise FileNotFoundError(
+            f"Regional report requires the core quarterly panel: {core_panel_path}"
+        )
     region_csv_path = (
         settings.extension_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
     )
     targets_path = settings.project_root / "config" / "paper_targets.yml"
 
-    extension_exhibit_inputs = ""
-    sample_window = "N/A"
-    if core_panel_path.exists():
-        extension_outputs = _write_extension_replication_artifacts(
-            ext_reports_dir,
-            core_panel_path,
-            region_csv_path,
-            targets_path,
-        )
-        sample_window = (
-            f"{extension_outputs['sample_start']}--{extension_outputs['sample_end']}"
-        )
-        extension_exhibit_inputs = textwrap.dedent(
-            r"""
+    extension_outputs = _write_extension_replication_artifacts(
+        ext_reports_dir,
+        core_panel_path,
+        region_csv_path,
+        targets_path,
+    )
+    sample_window = (
+        f"{extension_outputs['sample_start']}--{extension_outputs['sample_end']}"
+    )
+    extension_exhibit_inputs = textwrap.dedent(
+        r"""
             \subsection{Replication-Style Results with $cay_R$}
             \input{generated/tables/table_ii_extension_cay_r.tex}
             \input{generated/figures/figure_1_extension_cay_r.tex}
             \input{generated/tables/table_iii_extension_cay_r.tex}
             \input{generated/tables/table_vi_extension_cay_r.tex}
             """
-        ).strip()
-    else:
-        extension_exhibit_inputs = (
-            r"\textbf{Extension exhibits unavailable:} run "
-            r"\texttt{doit extension\_region\_report}."
-        )
+    ).strip()
 
     tex = (
         textwrap.dedent(

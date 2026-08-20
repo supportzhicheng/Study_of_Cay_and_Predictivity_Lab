@@ -6,12 +6,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-RAW_HOUSEHOLDS_PATH = ROOT / "raw" / "FRB_Z1_S14_b_Q.csv"
-RAW_HNPO_PATH = ROOT / "raw" / "FRB_Z1_S1M_b_Q.csv"
-OUT_COMPONENTS_HOUSEHOLDS = ROOT / "cay_components_households_q.csv"
-OUT_COMPONENTS_HNPO = ROOT / "cay_components_hnpo_q.csv"
-OUT_METADATA = ROOT / "series_metadata.csv"
+from src.settings import load_settings
 
 HH_HOUSING_CODE = "LM155035015.Q"
 HH_FINANCIAL_CODE = "FL194090005.Q"
@@ -182,13 +177,20 @@ def _write_metadata(out_path: Path) -> None:
         )
 
 
-def main() -> None:
-    if not RAW_HOUSEHOLDS_PATH.exists():
-        raise FileNotFoundError(f"Raw input file not found: {RAW_HOUSEHOLDS_PATH}")
-    if not RAW_HNPO_PATH.exists():
-        raise FileNotFoundError(f"Raw input file not found: {RAW_HNPO_PATH}")
+def build_s14_components(raw_dir: Path, normalized_dir: Path) -> list[Path]:
+    """Build household and HNPO component contracts from Z.1 snapshots."""
+    raw_households_path = raw_dir / "FRB_Z1_S14_b_Q.csv"
+    raw_hnpo_path = raw_dir / "FRB_Z1_S1M_b_Q.csv"
+    if not raw_households_path.exists():
+        raise FileNotFoundError(f"Raw input file not found: {raw_households_path}")
+    if not raw_hnpo_path.exists():
+        raise FileNotFoundError(f"Raw input file not found: {raw_hnpo_path}")
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    households_path = normalized_dir / "cay_components_households_q.csv"
+    hnpo_path = normalized_dir / "cay_components_hnpo_q.csv"
+    metadata_path = normalized_dir / "series_metadata.csv"
 
-    hh_quarters, hh_series = _read_series(RAW_HOUSEHOLDS_PATH)
+    hh_quarters, hh_series = _read_series(raw_households_path)
     _check_required(
         hh_series,
         [
@@ -202,7 +204,7 @@ def main() -> None:
     _write_components(
         hh_quarters,
         hh_series,
-        OUT_COMPONENTS_HOUSEHOLDS,
+        households_path,
         HH_HOUSING_CODE,
         HH_FINANCIAL_CODE,
         HH_CHECKABLE_CODE,
@@ -210,7 +212,7 @@ def main() -> None:
         HH_MMF_CODE,
     )
 
-    hnpo_quarters, hnpo_series = _read_series(RAW_HNPO_PATH)
+    hnpo_quarters, hnpo_series = _read_series(raw_hnpo_path)
     _check_required(
         hnpo_series,
         [
@@ -224,7 +226,7 @@ def main() -> None:
     _write_components(
         hnpo_quarters,
         hnpo_series,
-        OUT_COMPONENTS_HNPO,
+        hnpo_path,
         HNPO_HOUSING_CODE,
         HNPO_FINANCIAL_CODE,
         HNPO_CHECKABLE_CODE,
@@ -232,7 +234,16 @@ def main() -> None:
         HNPO_MMF_CODE,
     )
 
-    _write_metadata(OUT_METADATA)
+    _write_metadata(metadata_path)
+    return [households_path, hnpo_path, metadata_path]
+
+
+def main() -> None:
+    settings = load_settings([])
+    for path in build_s14_components(
+        settings.extension_raw_dir, settings.extension_normalized_dir
+    ):
+        print(path)
 
 
 if __name__ == "__main__":

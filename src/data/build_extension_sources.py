@@ -5,20 +5,15 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import time
-import urllib.parse
 import urllib.request
 import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-RAW = ROOT / "raw"
+from src.settings import load_settings
 
 DFA_ZIP_URL = "https://www.federalreserve.gov/releases/z1/dataviz/download/zips/dfa.zip"
-FDIC_API = "https://banks.data.fdic.gov/api/sod"
-
 STATES = ["CA", "IL", "TX"]
 STATE_NAMES = {"CA": "California", "IL": "Illinois", "TX": "Texas"}
 
@@ -42,25 +37,23 @@ def _fetch_text(url: str) -> str:
     raise RuntimeError(f"Failed to fetch URL after retries: {url}") from last_exc
 
 
-def _fetch_json(url: str) -> dict:
-    return json.loads(_fetch_text(url))
-
-
 def _quarter_key(q: str) -> tuple[int, int]:
     year = int(q[:4])
     quarter = int(q[-1])
     return (year, quarter)
 
 
-def _ensure_dfa_detail_csv() -> Path:
-    RAW.mkdir(parents=True, exist_ok=True)
-    zip_path = RAW / "dfa.zip"
-    detail_path = RAW / "dfa-networth-levels-detail.csv"
+def _ensure_dfa_detail_csv(raw_dir: Path, *, allow_network: bool) -> Path:
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = raw_dir / "dfa.zip"
+    detail_path = raw_dir / "dfa-networth-levels-detail.csv"
+    if not zip_path.exists() and not allow_network:
+        raise FileNotFoundError(f"Missing pinned DFA archive: {zip_path}")
     if not zip_path.exists():
         zip_path.write_bytes(urllib.request.urlopen(DFA_ZIP_URL, timeout=60).read())
     if not detail_path.exists():
         with zipfile.ZipFile(zip_path) as zf:
-            zf.extract("dfa-networth-levels-detail.csv", RAW)
+            zf.extract("dfa-networth-levels-detail.csv", raw_dir)
     return detail_path
 
 
@@ -69,8 +62,11 @@ def _read_csv_dicts(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
-def build_wealth_group_dataset() -> None:
-    detail_path = _ensure_dfa_detail_csv()
+def build_wealth_group_dataset(
+    raw_dir: Path, normalized_dir: Path, *, allow_network: bool = False
+) -> Path:
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    detail_path = _ensure_dfa_detail_csv(raw_dir, allow_network=allow_network)
     rows = _read_csv_dicts(detail_path)
 
     group_map = {
@@ -100,7 +96,7 @@ def build_wealth_group_dataset() -> None:
         bucket["financial"] += financial
         bucket["liquid"] += liquid
 
-    out_path = ROOT / "cay_components_wealth_groups_q.csv"
+    out_path = normalized_dir / "cay_components_wealth_groups_q.csv"
     ordered = sorted(agg.keys(), key=lambda x: (_quarter_key(x[0]), x[1]))
     with out_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
@@ -124,21 +120,26 @@ def build_wealth_group_dataset() -> None:
                     round(vals["liquid"], 3),
                 ]
             )
+    return out_path
 
 
-def _fetch_fred_series(series_id: str) -> list[dict[str, str]]:
-    cache_path = RAW / f"fred_{series_id}.csv"
+def _fetch_fred_series(
+    series_id: str, raw_dir: Path, *, allow_network: bool
+) -> list[dict[str, str]]:
+    cache_path = raw_dir / f"fred_{series_id}.csv"
     if cache_path.exists():
         text = cache_path.read_text(encoding="utf-8-sig")
-    else:
+    elif allow_network:
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
         text = _fetch_text(url)
         cache_path.write_text(text, encoding="utf-8")
+    else:
+        raise FileNotFoundError(f"Missing pinned FRED source: {cache_path}")
     return list(csv.DictReader(io.StringIO(text)))
 
 
-def _load_national_components() -> dict[str, dict[str, float]]:
-    path = ROOT / "cay_components_hnpo_q.csv"
+def _load_national_components(normalized_dir: Path) -> dict[str, dict[str, float]]:
+    path = normalized_dir / "cay_components_hnpo_q.csv"
     rows = _read_csv_dicts(path)
     out: dict[str, dict[str, float]] = {}
     for row in rows:
@@ -154,66 +155,20 @@ def _load_national_components() -> dict[str, dict[str, float]]:
     return out
 
 
-def _fetch_fdic_state_deposits_annual(
-    years: list[int],
-) -> dict[tuple[int, str], float]:
-    cache_path = RAW / "fdic_state_deposits_annual_ca_il_tx.csv"
-    if cache_path.exists():
-        cached_rows = _read_csv_dicts(cache_path)
-        cached: dict[tuple[int, str], float] = {}
-        for row in cached_rows:
-            cached[(int(row["year"]), row["state"])] = float(row["depsumbr_sum"])
-        if cached:
-            return cached
-
-    years_set = set(years)
-    results: dict[tuple[int, str], float] = {}
-    for state in STATES:
-        yearly_totals: dict[int, float] = defaultdict(float)
-        offset = 0
-        limit = 10000
-        while True:
-            params = {
-                "filters": f"STALP:{state}",
-                "fields": "YEAR,DEPSUMBR",
-                "limit": str(limit),
-                "offset": str(offset),
-                "format": "json",
-            }
-            url = FDIC_API + "?" + urllib.parse.urlencode(params)
-            data = _fetch_json(url)
-            items = data.get("data", [])
-            if not items:
-                break
-            for item in items:
-                payload = item.get("data", {})
-                year = payload.get("YEAR")
-                value = payload.get("DEPSUMBR")
-                if year is None or value is None:
-                    continue
-                year_int = int(year)
-                if year_int in years_set:
-                    yearly_totals[year_int] += float(value)
-            if len(items) < limit:
-                break
-            offset += limit
-            time.sleep(0.2)
-
-        for year, total in yearly_totals.items():
-            if total > 0:
-                results[(year, state)] = total
-    return results
-
-
-def build_regional_proxy_dataset() -> None:
-    national = _load_national_components()
+def build_regional_proxy_dataset(
+    raw_dir: Path, normalized_dir: Path, *, allow_network: bool = False
+) -> Path:
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    national = _load_national_components(normalized_dir)
     quarters = [
-        q for q in sorted(national.keys(), key=_quarter_key) if _quarter_key(q) >= (1989, 3)
+        q
+        for q in sorted(national.keys(), key=_quarter_key)
+        if _quarter_key(q) >= (1989, 3)
     ]
 
     hpi_q: dict[str, dict[str, float]] = {s: {} for s in list(STATES) + ["US"]}
     for state_or_us, series_id in FRED_HPI_IDS.items():
-        rows = _fetch_fred_series(series_id)
+        rows = _fetch_fred_series(series_id, raw_dir, allow_network=allow_network)
         for row in rows:
             date = row["observation_date"]
             value = row[series_id]
@@ -227,29 +182,21 @@ def build_regional_proxy_dataset() -> None:
     pcpi_y: dict[str, dict[int, float]] = {s: {} for s in STATES}
     pop_y: dict[str, dict[int, float]] = {s: {} for s in STATES}
     for state, series_id in FRED_PCPI_IDS.items():
-        for row in _fetch_fred_series(series_id):
+        for row in _fetch_fred_series(series_id, raw_dir, allow_network=allow_network):
             value = row[series_id]
             if value == ".":
                 continue
             year = int(row["observation_date"][:4])
             pcpi_y[state][year] = float(value)
     for state, series_id in FRED_POP_IDS.items():
-        for row in _fetch_fred_series(series_id):
+        for row in _fetch_fred_series(series_id, raw_dir, allow_network=allow_network):
             value = row[series_id]
             if value == ".":
                 continue
             year = int(row["observation_date"][:4])
             pop_y[state][year] = float(value)
 
-    fdic_raw_path = RAW / "fdic_state_deposits_annual_ca_il_tx.csv"
     fdic: dict[tuple[int, str], float] = {}
-    if fdic_raw_path.exists():
-        for row in _read_csv_dicts(fdic_raw_path):
-            fdic[(int(row["year"]), row["state"])] = float(row["depsumbr_sum"])
-    else:
-        with fdic_raw_path.open("w", encoding="utf-8", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["year", "state", "depsumbr_sum"])
 
     out_rows: list[list[object]] = []
     for q in quarters:
@@ -300,7 +247,7 @@ def build_regional_proxy_dataset() -> None:
                 ]
             )
 
-    out_path = ROOT / "cay_components_region_ca_il_tx_q_proxy.csv"
+    out_path = normalized_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
     with out_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
@@ -318,7 +265,7 @@ def build_regional_proxy_dataset() -> None:
         )
         writer.writerows(out_rows)
 
-    method_path = ROOT / "region_proxy_method.csv"
+    method_path = normalized_dir / "region_proxy_method.csv"
     with method_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["dimension", "method", "source"])
@@ -350,11 +297,26 @@ def build_regional_proxy_dataset() -> None:
                 "National base: cay_components_hnpo_q.csv",
             ]
         )
+    return out_path
 
 
 def main() -> None:
-    build_wealth_group_dataset()
-    build_regional_proxy_dataset()
+    settings = load_settings([])
+    allow_network = settings.extension_acquisition_mode == "latest"
+    print(
+        build_wealth_group_dataset(
+            settings.extension_raw_dir,
+            settings.extension_normalized_dir,
+            allow_network=allow_network,
+        )
+    )
+    print(
+        build_regional_proxy_dataset(
+            settings.extension_raw_dir,
+            settings.extension_normalized_dir,
+            allow_network=allow_network,
+        )
+    )
 
 
 if __name__ == "__main__":

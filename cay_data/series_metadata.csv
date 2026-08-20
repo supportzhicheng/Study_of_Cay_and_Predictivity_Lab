@@ -1,7 +1,0 @@
-dataset,component,source_table,series_code,construction,unit,frequency
-households,housing_wealth,S14.b (Balance Sheet of Households),LM155035015.Q,Direct series,Million USD,Quarterly
-households,financial_wealth,S14.b (Balance Sheet of Households),FL194090005.Q,Direct series,Million USD,Quarterly
-households,liquid_assets,S14.b (Balance Sheet of Households),FL193020005.Q + FL193030205.Q + FL193034005.Q,"Sum of checkable deposits & currency, other deposits incl. time/savings, and money market fund shares",Million USD,Quarterly
-households_and_nonprofits,housing_wealth,S1M.b (Balance Sheet of Households and Nonprofit Organizations),LM155035005.Q,Direct series,Million USD,Quarterly
-households_and_nonprofits,financial_wealth,S1M.b (Balance Sheet of Households and Nonprofit Organizations),FL154090005.Q,Direct series,Million USD,Quarterly
-households_and_nonprofits,liquid_assets,S1M.b (Balance Sheet of Households and Nonprofit Organizations),FL153020005.Q + FL153030005.Q + FL153034005.Q,"Sum of checkable deposits & currency, time/savings deposits, and money market fund shares",Million USD,Quarterly

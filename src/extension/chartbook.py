@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -84,154 +83,26 @@ def _fetch_risky_asset_quarterly_prices(
     ticker: str,
     start: str | None,
     end: str | None,
-    data_source: str,
+    market_data_dir: Path,
 ) -> pd.Series:
-    from pandas_datareader import data as web
-
-    def _cache_path_for_ticker(ticker_symbol: str) -> Path:
-        cache_dir = PROJECT_ROOT / "cay_data" / "raw" / "market_cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir / f"{ticker_symbol}.csv"
-
-    def _extract_price_series(
-        raw_prices: pd.DataFrame, ticker_symbol: str
-    ) -> pd.Series:
-        if raw_prices.empty:
-            raise RuntimeError(f"No market data returned for ticker '{ticker_symbol}'.")
-        if not isinstance(raw_prices.index, pd.DatetimeIndex):
-            raise RuntimeError(
-                f"Market data index for ticker '{ticker_symbol}' is not DatetimeIndex."
-            )
-        raw_prices = raw_prices.sort_index()
-        candidate_cols = ("Adj Close", "Close", "close")
-        price_series: pd.Series | None = None
-        if isinstance(raw_prices.columns, pd.MultiIndex):
-            level0 = set(raw_prices.columns.get_level_values(0))
-            for candidate in candidate_cols:
-                if candidate in level0:
-                    candidate_frame = raw_prices[candidate]
-                    if isinstance(candidate_frame, pd.DataFrame):
-                        price_series = candidate_frame.iloc[:, 0]
-                    else:
-                        price_series = candidate_frame
-                    break
-        else:
-            price_col = next(
-                (col for col in candidate_cols if col in raw_prices.columns),
-                None,
-            )
-            if price_col is not None:
-                price_series = raw_prices[price_col]
-
-        if price_series is None:
-            available_cols = ", ".join(str(c) for c in raw_prices.columns)
-            raise RuntimeError(
-                f"Market data for ticker '{ticker_symbol}' is missing a close price column. "
-                f"Available columns: {available_cols}"
-            )
-        return pd.to_numeric(price_series, errors="coerce").dropna()
-
-    def _load_cached_price_series(cache_path: Path, ticker_symbol: str) -> pd.Series:
-        if not cache_path.exists():
-            raise FileNotFoundError(f"Market cache file not found: {cache_path}")
-        cached = pd.read_csv(cache_path)
-        required = {"date", "price"}
-        if not required.issubset(cached.columns):
-            raise RuntimeError(
-                f"Market cache file {cache_path} must contain columns: date, price"
-            )
-        date_index = pd.to_datetime(cached["date"], errors="coerce")
-        price_series = pd.to_numeric(cached["price"], errors="coerce")
-        out = pd.Series(
-            price_series.values, index=date_index, name=ticker_symbol
-        ).dropna()
-        if out.empty:
-            raise RuntimeError(f"Market cache file {cache_path} has no valid rows.")
-        if out.index.tz is not None:
-            out.index = out.index.tz_localize(None)
-        return out
-
     ticker_clean = ticker.strip().upper()
     if not ticker_clean:
         raise ValueError("risky_ticker must not be empty when provided.")
-
-    start_ts = pd.Period(start, freq="Q").to_timestamp(how="start") if start else None
-    end_ts = pd.Period(end, freq="Q").to_timestamp(how="end") if end else None
-    cache_path = _cache_path_for_ticker(ticker_clean)
-    try:
-        cached_prices = _load_cached_price_series(cache_path, ticker_clean)
-        cached_quarters = cached_prices.index.to_period("Q")
-        requested_start = pd.Period(start, freq="Q") if start else cached_quarters.min()
-        requested_end = pd.Period(end, freq="Q") if end else cached_quarters.max()
-        if (
-            cached_quarters.min() <= requested_start
-            and cached_quarters.max() >= requested_end
-        ):
-            quarterly_prices = cached_prices.resample("QE-DEC").last().dropna()
-            quarterly_prices.index = quarterly_prices.index.to_period("Q")
-            quarterly_prices.name = "risky_asset_price"
-            return quarterly_prices
-    except (FileNotFoundError, RuntimeError):
-        pass
-
-    try:
-        raw_prices = web.DataReader(
-            ticker_clean,
-            data_source,
-            start=start_ts,
-            end=end_ts,
+    cache_path = market_data_dir / f"{ticker_clean}.csv"
+    if not cache_path.exists():
+        raise FileNotFoundError(
+            f"Declared market cache is missing: {cache_path}. Run extension_acquire."
         )
-        price_series = _extract_price_series(raw_prices, ticker_clean)
-    except (NotImplementedError, RuntimeError, ValueError) as exc:
-        try:
-            import yfinance as yf
-        except ImportError as import_exc:
-            raise RuntimeError(
-                "Risky-asset fallback requires yfinance when pandas-datareader "
-                f"source '{data_source}' is unavailable."
-            ) from import_exc
-
-        end_download = None if end_ts is None else end_ts + pd.Timedelta(days=1)
-        price_series = pd.Series(dtype=float)
-        last_yf_error: RuntimeError | None = None
-        for attempt in range(1, 6):
-            try:
-                raw_prices = yf.download(
-                    ticker_clean,
-                    start=start_ts,
-                    end=end_download,
-                    interval="1d",
-                    progress=False,
-                    auto_adjust=False,
-                )
-                if (
-                    isinstance(raw_prices.index, pd.DatetimeIndex)
-                    and raw_prices.index.tz is not None
-                ):
-                    raw_prices.index = raw_prices.index.tz_localize(None)
-                price_series = _extract_price_series(raw_prices, ticker_clean)
-                if not price_series.empty:
-                    break
-            except RuntimeError as yf_exc:
-                last_yf_error = yf_exc
-            time.sleep(min(2 * attempt, 8))
-
-        if price_series.empty:
-            try:
-                price_series = _load_cached_price_series(cache_path, ticker_clean)
-            except (FileNotFoundError, RuntimeError) as cache_exc:
-                raise RuntimeError(
-                    f"Unable to fetch market data for ticker '{ticker_clean}'. "
-                    "Tried pandas-datareader and yfinance (rate limits/network may apply), "
-                    f"last yfinance error: {last_yf_error or exc}. "
-                    f"and could not use local cache at {cache_path}. "
-                    "Create cache file with columns 'date,price' as a fallback."
-                ) from cache_exc
-
-    if not price_series.empty:
-        cache_df = price_series.rename("price").to_frame()
-        cache_df.index.name = "date"
-        cache_df.to_csv(cache_path)
+    cached = pd.read_csv(cache_path)
+    if not {"date", "price"}.issubset(cached.columns):
+        raise ValueError(
+            f"Market cache must contain date and price columns: {cache_path}"
+        )
+    price_series = pd.Series(
+        pd.to_numeric(cached["price"], errors="coerce").to_numpy(),
+        index=pd.to_datetime(cached["date"], errors="coerce"),
+        name=ticker_clean,
+    ).dropna()
     quarterly_prices = (
         pd.to_numeric(price_series, errors="coerce")
         .dropna()
@@ -241,10 +112,25 @@ def _fetch_risky_asset_quarterly_prices(
     )
     if quarterly_prices.empty:
         raise RuntimeError(
-            f"Quarterly close prices are empty for ticker '{ticker_clean}' "
-            f"from source '{data_source}'."
+            f"Quarterly close prices are empty for ticker '{ticker_clean}'."
         )
+    requested_start = (
+        pd.Period(start, freq="Q")
+        if start
+        else quarterly_prices.index.min().to_period("Q")
+    )
+    requested_end = (
+        pd.Period(end, freq="Q") if end else quarterly_prices.index.max().to_period("Q")
+    )
     quarterly_prices.index = quarterly_prices.index.to_period("Q")
+    if (
+        quarterly_prices.index.min() > requested_start
+        or quarterly_prices.index.max() < requested_end
+    ):
+        raise ValueError(
+            f"Market cache {cache_path} does not cover {requested_start} through {requested_end}."
+        )
+    quarterly_prices = quarterly_prices.loc[requested_start:requested_end]
     quarterly_prices.name = "risky_asset_price"
     return quarterly_prices
 
@@ -386,6 +272,7 @@ def build_chartbook(
     risky_tickers: str = "",
     risky_data_source: str = "stooq",
     cay_data_dir: str = str(PROJECT_ROOT / "cay_data"),
+    market_data_dir: str = str(PROJECT_ROOT / "_data" / "raw" / "extension" / "market"),
 ) -> None:
     """Create model outputs and a PDF chartbook for sub-cay predictivity."""
     sub_category = (cay_decomposition or sub_category) or None
@@ -423,7 +310,7 @@ def build_chartbook(
                     ticker=ticker,
                     start=start,
                     end=end,
-                    data_source=risky_data_source,
+                    market_data_dir=Path(market_data_dir),
                 ).rename(ticker)
             )
         risky_prices = pd.concat(risky_price_columns, axis=1, join="inner").dropna()

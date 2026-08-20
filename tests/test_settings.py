@@ -15,7 +15,18 @@ def test_repository_relative_defaults(tmp_path: Path):
     assert settings.reports_dir == tmp_path / "reports"
     assert settings.p10_input_dir == tmp_path / "_data" / "input"
     assert settings.p10_reference_dir == tmp_path / "asset"
-    assert settings.extension_data_dir == tmp_path / "cay_data"
+    assert (
+        settings.extension_data_dir == tmp_path / "_data" / "normalized" / "extension"
+    )
+    assert settings.extension_raw_dir == tmp_path / "_data" / "raw" / "extension"
+    assert (
+        settings.extension_normalized_dir
+        == tmp_path / "_data" / "normalized" / "extension"
+    )
+    assert (
+        settings.extension_processed_dir
+        == tmp_path / "_data" / "processed" / "extension"
+    )
     assert settings.extension_output_dir == tmp_path / "_output" / "extension"
     assert (
         settings.extension_reports_dir == tmp_path / "reports" / "paper" / "generated"

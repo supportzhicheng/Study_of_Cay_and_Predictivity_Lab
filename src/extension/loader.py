@@ -26,7 +26,9 @@ COL_Y = "y"  # log real labour income per capita
 COL_ER = "er"  # excess log stock return (e.g., annual or quarterly)
 
 COMPONENTS = ("housing", "financial", "liquid")
-_DEFAULT_CAY_DATA_DIR = Path(__file__).resolve().parents[2] / "cay_data"
+_DEFAULT_CAY_DATA_DIR = (
+    Path(__file__).resolve().parents[2] / "_data" / "normalized" / "extension"
+)
 _DATASET_FILE_MAP = {
     "households": "cay_components_households_q.csv",
     "households_and_nonprofits": "cay_components_hnpo_q.csv",

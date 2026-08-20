@@ -57,7 +57,9 @@ def import_region_data(settings: Settings) -> Path:
     if missing:
         raise ValueError(f"Region proxy CSV is missing required columns: {missing}")
 
-    out_parquet = settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    out_parquet = (
+        settings.extension_normalized_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    )
     raw_df.to_parquet(out_parquet)
 
     metadata = {
@@ -68,7 +70,7 @@ def import_region_data(settings: Settings) -> Path:
         "columns": list(raw_df.columns),
     }
     meta_path = (
-        settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+        settings.extension_normalized_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
     )
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     return out_parquet
@@ -159,7 +161,7 @@ def build_extension_panel(settings: Settings) -> Path:
     log-level deviation transforms, and saves the model-ready panel.
     """
     normalised_path = (
-        settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+        settings.extension_normalized_dir / f"{REGION_NORMALIZED_STEM}.parquet"
     )
     if not normalised_path.exists():
         raise FileNotFoundError(
@@ -179,7 +181,8 @@ def build_extension_panel(settings: Settings) -> Path:
         train_periods=settings.extension_train_periods,
     )
 
-    out_path = settings.extension_output_dir / f"{PANEL_STEM}.parquet"
+    out_path = settings.extension_processed_dir / f"{PANEL_STEM}.parquet"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     panel_to_save = panel.copy()
     panel_to_save.index = panel_to_save.index.astype(str)
     panel_to_save.to_parquet(out_path)
@@ -192,7 +195,7 @@ def build_extension_panel(settings: Settings) -> Path:
         "rows": len(panel),
         "segments": sorted(panel["segment"].unique().tolist()),
     }
-    (settings.extension_output_dir / f"{PANEL_STEM}.metadata.json").write_text(
+    (settings.extension_processed_dir / f"{PANEL_STEM}.metadata.json").write_text(
         json.dumps(meta, indent=2) + "\n", encoding="utf-8"
     )
     return out_path
@@ -216,7 +219,7 @@ def generate_extension_exhibits(settings: Settings) -> list[Path]:
     """
     from src.extension.reporting import generate_extension_report_artifacts
 
-    panel_path = settings.extension_output_dir / f"{PANEL_STEM}.parquet"
+    panel_path = settings.extension_processed_dir / f"{PANEL_STEM}.parquet"
     if not panel_path.exists():
         raise FileNotFoundError(
             f"Extension panel not found: {panel_path}. Run the 'panel' stage first."

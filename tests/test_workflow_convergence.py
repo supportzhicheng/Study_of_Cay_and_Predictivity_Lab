@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import hashlib
 import json
 from pathlib import Path
 
@@ -12,10 +11,6 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = PROJECT_ROOT / "tests" / "fixtures" / "migration_baseline.json"
 EXTENSION_SOURCES_PATH = PROJECT_ROOT / "config" / "extension_sources.yml"
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_repository_uses_environment_manifest_without_packaging_metadata():
@@ -66,42 +61,36 @@ def test_migration_baseline_fixture_matches_documented_expectations():
     }
 
 
-def test_extension_source_manifest_pins_tracked_hashes():
+def test_extension_source_manifest_declares_ignored_cache_contracts():
     manifest = yaml.safe_load(EXTENSION_SOURCES_PATH.read_text(encoding="utf-8"))
 
-    assert manifest["tracked_raw_root"] == "cay_data/raw"
-    assert manifest["sources"]["fdic_state_deposits"]["enabled"] is False
-
-    z1_s14 = manifest["sources"]["z1_s14_b"]
-    z1_s1m = manifest["sources"]["z1_s1m_b"]
-    dfa = manifest["sources"]["dfa_zip"]
-
-    assert _sha256(PROJECT_ROOT / z1_s14["tracked_file"]) == z1_s14["sha256"]
-    assert _sha256(PROJECT_ROOT / z1_s1m["tracked_file"]) == z1_s1m["sha256"]
-    assert _sha256(PROJECT_ROOT / dfa["tracked_file"]) == dfa["sha256"]
-
+    assert manifest["tracked_raw_root"] == "_data/raw/extension"
+    assert manifest["acquisition_modes"] == ["baseline", "latest"]
+    fdic = manifest["sources"]["fdic_state_deposits"]
+    assert fdic == {
+        "provider": "FDIC Summary of Deposits",
+        "enabled": False,
+        "current_query_endpoint": "https://banks.data.fdic.gov/api/sod",
+        "required_source_file": False,
+        "method": "income_share_fallback",
+    }
     fred_series = manifest["sources"]["fred"]["series"]
     assert len(fred_series) == 10
-    for spec in fred_series.values():
-        assert _sha256(PROJECT_ROOT / spec["tracked_file"]) == spec["sha256"]
+    assert all(
+        spec["cache_path"].startswith("_data/raw/extension/")
+        for spec in fred_series.values()
+    )
+    qqq = manifest["sources"]["qqq_market"]
+    assert qqq["rows"] == 814
+    assert (
+        qqq["sha256"]
+        == "ecbcf48746b1167b502d06fd07022f3f2ff7eff69fb89c4d4b08a8853c802bbb"
+    )
+    assert qqq["cache_path"] == "_data/raw/extension/market/QQQ.csv"
 
-    supplemental = manifest["supplemental_tracked_snapshots"]
-    for spec in supplemental:
-        assert _sha256(PROJECT_ROOT / spec["tracked_file"]) == spec["sha256"]
 
-    raw_root = PROJECT_ROOT / "cay_data" / "raw"
-    assert sorted(path.name for path in raw_root.glob("fred_*.csv")) == [
-        "fred_CAPCPI.csv",
-        "fred_CAPOP.csv",
-        "fred_CASTHPI.csv",
-        "fred_ILPCPI.csv",
-        "fred_ILPOP.csv",
-        "fred_ILSTHPI.csv",
-        "fred_TXPCPI.csv",
-        "fred_TXPOP.csv",
-        "fred_TXSTHPI.csv",
-        "fred_USSTHPI.csv",
-    ]
+def test_no_provider_or_generated_data_is_tracked():
+    assert not (PROJECT_ROOT / "cay_data").exists()
 
 
 def test_python_modules_do_not_import_cay_lab():

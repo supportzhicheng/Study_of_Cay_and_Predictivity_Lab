@@ -7,7 +7,16 @@ import sys
 from pathlib import Path
 
 from src.bootstrap_real_data import bootstrap_real_data
+from src.data.build_extension_s14 import build_s14_components
+from src.data.build_extension_sources import (
+    build_regional_proxy_dataset,
+    build_wealth_group_dataset,
+)
 from src.data.build_sources import RAW_FILES, normalize_pulled_sources
+from src.data.extension_acquisition import (
+    acquire_extension_sources,
+    extension_sources_current,
+)
 from src.data.import_local import import_local_source
 from src.data.pull_author_cay import ensure_author_data
 from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
@@ -36,16 +45,16 @@ EXTENSION_REGION_SOURCE_CSV = (
     SETTINGS.extension_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
 )
 EXTENSION_REGION_NORMALIZED_PARQUET = (
-    SETTINGS.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    SETTINGS.extension_normalized_dir / f"{REGION_NORMALIZED_STEM}.parquet"
 )
 EXTENSION_REGION_NORMALIZED_META = (
-    SETTINGS.extension_output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+    SETTINGS.extension_normalized_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
 )
 EXTENSION_PANEL_PARQUET = (
-    SETTINGS.extension_output_dir / f"{EXTENSION_PANEL_STEM}.parquet"
+    SETTINGS.extension_processed_dir / f"{EXTENSION_PANEL_STEM}.parquet"
 )
 EXTENSION_PANEL_META = (
-    SETTINGS.extension_output_dir / f"{EXTENSION_PANEL_STEM}.metadata.json"
+    SETTINGS.extension_processed_dir / f"{EXTENSION_PANEL_STEM}.metadata.json"
 )
 EXTENSION_REPORT_TEX = SETTINGS.extension_reports_dir / "extension_report.tex"
 EXTENSION_EXHIBIT_ARTIFACTS = (
@@ -63,7 +72,19 @@ SECTION9_CHARTBOOK_TARGETS = (
     SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_rolling.csv",
     SECTION9_CHARTBOOK_OUTPUT_DIR / "chartbook_subcay_predictivity.pdf",
 )
-SECTION9_QQQ_CACHE = SETTINGS.extension_data_dir / "raw" / "market_cache" / "QQQ.csv"
+SECTION9_QQQ_CACHE = SETTINGS.extension_raw_dir / "market" / "QQQ.csv"
+EXTENSION_FRED_IDS = (
+    "CASTHPI",
+    "ILSTHPI",
+    "TXSTHPI",
+    "USSTHPI",
+    "CAPCPI",
+    "ILPCPI",
+    "TXPCPI",
+    "CAPOP",
+    "ILPOP",
+    "TXPOP",
+)
 
 TABLE_IDS = (
     "table_ii_replication",
@@ -367,75 +388,84 @@ def task_bootstrap_real_data():
     }
 
 
-def _build_extension_input_data() -> None:
-    subprocess.run(
-        [str(Path(sys.executable)), "cay_data/build_components_from_s14.py"],
-        check=True,
-    )
-    subprocess.run(
-        [str(Path(sys.executable)), "cay_data/build_extension_data.py"],
-        check=True,
-    )
+def _acquire_extension_data() -> None:
+    acquire_extension_sources(SETTINGS)
 
 
-def task_extension_build_input_data():
-    """Build local extension decomposition CSV inputs under cay_data/."""
-    targets = [
-        str(SETTINGS.extension_data_dir / "cay_components_households_q.csv"),
-        str(SETTINGS.extension_data_dir / "cay_components_hnpo_q.csv"),
-        str(SETTINGS.extension_data_dir / "cay_components_wealth_groups_q.csv"),
-        str(EXTENSION_REGION_SOURCE_CSV),
-    ]
+def task_extension_acquire():
+    """Acquire or import declared extension source caches."""
     return {
-        "actions": [_build_extension_input_data],
+        "actions": [_acquire_extension_data],
+        "targets": [
+            str(SETTINGS.extension_raw_dir / "FRB_Z1_S14_b_Q.csv"),
+            str(SETTINGS.extension_raw_dir / "FRB_Z1_S1M_b_Q.csv"),
+            str(SETTINGS.extension_raw_dir / "dfa.zip"),
+            str(SECTION9_QQQ_CACHE),
+        ]
+        + [
+            str(SETTINGS.extension_raw_dir / f"fred_{series_id}.csv")
+            for series_id in EXTENSION_FRED_IDS
+        ],
         "task_dep": ["config"],
-        "targets": targets,
-        "uptodate": [lambda: all(Path(target).exists() for target in targets)],
+        "uptodate": [lambda: extension_sources_current(SETTINGS)],
     }
 
 
-def _run_extension_import_region_data() -> None:
+def _prepare_extension_data() -> None:
+    allow_network = SETTINGS.extension_acquisition_mode == "latest"
+    build_s14_components(SETTINGS.extension_raw_dir, SETTINGS.extension_normalized_dir)
+    build_wealth_group_dataset(
+        SETTINGS.extension_raw_dir,
+        SETTINGS.extension_normalized_dir,
+        allow_network=allow_network,
+    )
+    build_regional_proxy_dataset(
+        SETTINGS.extension_raw_dir,
+        SETTINGS.extension_normalized_dir,
+        allow_network=allow_network,
+    )
     import_region_data(SETTINGS)
 
 
-def task_extension_import_region_data():
-    """Stage 1: validate and normalise the extension region-proxy CSV."""
+def task_extension_prepare():
+    """Build normalized extension components and region contracts."""
     return {
-        "actions": [_run_extension_import_region_data],
-        "file_dep": [str(EXTENSION_REGION_SOURCE_CSV)],
+        "actions": [_prepare_extension_data],
+        "file_dep": [
+            str(SETTINGS.extension_raw_dir / "FRB_Z1_S14_b_Q.csv"),
+            str(SETTINGS.extension_raw_dir / "FRB_Z1_S1M_b_Q.csv"),
+            str(SETTINGS.extension_raw_dir / "dfa.zip"),
+        ],
         "targets": [
+            str(SETTINGS.extension_normalized_dir / "cay_components_households_q.csv"),
+            str(SETTINGS.extension_normalized_dir / "cay_components_hnpo_q.csv"),
+            str(
+                SETTINGS.extension_normalized_dir / "cay_components_wealth_groups_q.csv"
+            ),
+            str(EXTENSION_REGION_SOURCE_CSV),
             str(EXTENSION_REGION_NORMALIZED_PARQUET),
             str(EXTENSION_REGION_NORMALIZED_META),
         ],
-        "task_dep": ["extension_build_input_data"],
+        "task_dep": ["extension_acquire"],
     }
 
 
-def _run_extension_build_panel() -> None:
+def _analyze_extension_data() -> None:
     build_extension_panel(SETTINGS)
-
-
-def task_extension_build_panel():
-    """Stage 2: build the extension predictivity panel."""
-    return {
-        "actions": [_run_extension_build_panel],
-        "file_dep": [str(EXTENSION_REGION_NORMALIZED_PARQUET)],
-        "targets": [str(EXTENSION_PANEL_PARQUET), str(EXTENSION_PANEL_META)],
-        "task_dep": ["extension_import_region_data"],
-    }
-
-
-def _run_extension_generate_exhibits() -> None:
     generate_extension_exhibits(SETTINGS)
 
 
-def task_extension_generate_exhibits():
-    """Stage 3: generate extension chartbook/CSV/QA artifacts."""
+def task_extension_analyze():
+    """Build the extension panel and analysis artifacts."""
     return {
-        "actions": [_run_extension_generate_exhibits],
-        "file_dep": [str(EXTENSION_PANEL_PARQUET)],
-        "targets": [str(path) for path in EXTENSION_EXHIBIT_ARTIFACTS],
-        "task_dep": ["extension_build_panel"],
+        "actions": [_analyze_extension_data],
+        "file_dep": [str(EXTENSION_REGION_NORMALIZED_PARQUET)],
+        "targets": [
+            str(EXTENSION_PANEL_PARQUET),
+            str(EXTENSION_PANEL_META),
+            *(str(path) for path in EXTENSION_EXHIBIT_ARTIFACTS),
+        ],
+        "task_dep": ["extension_prepare"],
     }
 
 
@@ -447,9 +477,12 @@ def task_extension_region_report():
     """Stage 4: generate the extension LaTeX section used by Section 8."""
     return {
         "actions": [_run_extension_generate_combined_report],
-        "file_dep": [str(SETTINGS.extension_output_dir / "extension_qa.json")],
+        "file_dep": [
+            str(SETTINGS.extension_output_dir / "extension_qa.json"),
+            str(PANEL_PATH),
+        ],
         "targets": [str(EXTENSION_REPORT_TEX)],
-        "task_dep": ["extension_generate_exhibits"],
+        "task_dep": ["extension_analyze", "build_panel"],
     }
 
 
@@ -463,7 +496,8 @@ def _run_extension_section9_chartbook() -> None:
         min_history_periods=2,
         risky_ticker="QQQ",
         output_dir=str(SECTION9_CHARTBOOK_OUTPUT_DIR),
-        cay_data_dir=str(SETTINGS.extension_data_dir),
+        cay_data_dir=str(SETTINGS.extension_normalized_dir),
+        market_data_dir=str(SETTINGS.extension_raw_dir / "market"),
     )
 
 
@@ -472,11 +506,13 @@ def task_extension_section9_chartbook():
     return {
         "actions": [_run_extension_section9_chartbook],
         "file_dep": [
-            str(SETTINGS.extension_data_dir / "cay_components_wealth_groups_q.csv"),
+            str(
+                SETTINGS.extension_normalized_dir / "cay_components_wealth_groups_q.csv"
+            ),
             str(SECTION9_QQQ_CACHE),
         ],
         "targets": [str(path) for path in SECTION9_CHARTBOOK_TARGETS],
-        "task_dep": ["extension_build_input_data"],
+        "task_dep": ["extension_prepare"],
     }
 
 

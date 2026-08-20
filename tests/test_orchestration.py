@@ -81,6 +81,11 @@ def test_doit_lists_required_core_tasks():
         "compile_report",
         "run_tests",
         "bootstrap_real_data",
+        "extension_acquire",
+        "extension_prepare",
+        "extension_analyze",
+        "extension_region_report",
+        "extension_section9_chartbook",
     ):
         assert task in completed.stdout
 

@@ -1,4 +1,0 @@
-dimension,status,source_or_note
-asset_type,available_included,"Built from Z.1 S14.b and S1M.b quarterly balance-sheet packages"
-wealth_level,available_direct,"Built from DFA networth detail with top10 = TopPt1 + RemainingTop1 + Next9, middle40 = Next40, bottom50 = Bottom50"
-region,available_indirect_proxy,"Built for California/Illinois/Texas using FRED-based proxy shares; see region_proxy_method.csv"

@@ -42,6 +42,9 @@ class Settings:
     p10_input_dir: Path
     p10_reference_dir: Path
     extension_data_dir: Path
+    extension_raw_dir: Path
+    extension_normalized_dir: Path
+    extension_processed_dir: Path
     extension_output_dir: Path
     extension_reports_dir: Path
     extension_input_dir: Path
@@ -56,6 +59,7 @@ class Settings:
     extension_prediction_window: int
     extension_target_component: str
     extension_min_history_periods: int
+    extension_acquisition_mode: str
 
     def create_directories(self) -> None:
         """Create generated-data directories without touching source inputs."""
@@ -63,6 +67,9 @@ class Settings:
             self.data_dir,
             self.output_dir,
             self.reports_dir,
+            self.extension_raw_dir,
+            self.extension_normalized_dir,
+            self.extension_processed_dir,
             self.extension_output_dir,
             self.extension_reports_dir,
         ):
@@ -78,6 +85,9 @@ class Settings:
             "P10_INPUT_DIR": str(self.p10_input_dir),
             "P10_REFERENCE_DIR": str(self.p10_reference_dir),
             "EXTENSION_DATA_DIR": str(self.extension_data_dir),
+            "EXTENSION_RAW_DIR": str(self.extension_raw_dir),
+            "EXTENSION_NORMALIZED_DIR": str(self.extension_normalized_dir),
+            "EXTENSION_PROCESSED_DIR": str(self.extension_processed_dir),
             "EXTENSION_OUTPUT_DIR": str(self.extension_output_dir),
             "EXTENSION_REPORTS_DIR": str(self.extension_reports_dir),
             "EXTENSION_INPUT_DIR": str(self.extension_input_dir),
@@ -107,7 +117,10 @@ def load_settings(
         "REPORTS_DIR": "reports",
         "P10_INPUT_DIR": "_data/input",
         "P10_REFERENCE_DIR": "asset",
-        "EXTENSION_DATA_DIR": "cay_data",
+        "EXTENSION_DATA_DIR": "_data/normalized/extension",
+        "EXTENSION_RAW_DIR": "_data/raw/extension",
+        "EXTENSION_NORMALIZED_DIR": "_data/normalized/extension",
+        "EXTENSION_PROCESSED_DIR": "_data/processed/extension",
         "EXTENSION_OUTPUT_DIR": "_output/extension",
         "EXTENSION_REPORTS_DIR": "reports/paper/generated",
         "EXTENSION_INPUT_DIR": "_data/input/extension",
@@ -122,6 +135,7 @@ def load_settings(
         "EXTENSION_PREDICTION_WINDOW": "1",
         "EXTENSION_TARGET_COMPONENT": "financial",
         "EXTENSION_MIN_HISTORY_PERIODS": "8",
+        "EXTENSION_ACQUISITION_MODE": "latest",
     }
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -140,6 +154,13 @@ def load_settings(
         p10_input_dir=_resolve_path(str(value("P10_INPUT_DIR")), root),
         p10_reference_dir=_resolve_path(str(value("P10_REFERENCE_DIR")), root),
         extension_data_dir=_resolve_path(str(value("EXTENSION_DATA_DIR")), root),
+        extension_raw_dir=_resolve_path(str(value("EXTENSION_RAW_DIR")), root),
+        extension_normalized_dir=_resolve_path(
+            str(value("EXTENSION_NORMALIZED_DIR")), root
+        ),
+        extension_processed_dir=_resolve_path(
+            str(value("EXTENSION_PROCESSED_DIR")), root
+        ),
         extension_output_dir=_resolve_path(str(value("EXTENSION_OUTPUT_DIR")), root),
         extension_reports_dir=_resolve_path(str(value("EXTENSION_REPORTS_DIR")), root),
         extension_input_dir=_resolve_path(str(value("EXTENSION_INPUT_DIR")), root),
@@ -154,6 +175,7 @@ def load_settings(
         extension_prediction_window=int(str(value("EXTENSION_PREDICTION_WINDOW"))),
         extension_target_component=str(value("EXTENSION_TARGET_COMPONENT")),
         extension_min_history_periods=int(str(value("EXTENSION_MIN_HISTORY_PERIODS"))),
+        extension_acquisition_mode=str(value("EXTENSION_ACQUISITION_MODE")).lower(),
     )
 
 
