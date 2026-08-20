@@ -355,6 +355,12 @@ doit -f cay_lab/dodo.py chartbook \
 - `--output-dir`: output folder (default: `cay_lab/output`)
 - `--min-history-periods`: minimum history for the expanding-mean sub-cay transform
 
+If live risky-asset download is rate-limited, CAY Lab falls back to a local cache
+file at `cay_data/raw/market_cache/<TICKER>.csv` with columns:
+
+- `date` (YYYY-MM-DD)
+- `price` (daily close or adjusted close)
+
 ### Outputs
 
 - `cay_lab/output/subcay_predictivity_prepared.csv`
