@@ -91,7 +91,13 @@ def load_cay_decomposition(
     data_dir = Path(cay_data_dir) if cay_data_dir is not None else _DEFAULT_CAY_DATA_DIR
     file_path = data_dir / _DATASET_FILE_MAP[dataset]
     if not file_path.exists():
-        raise FileNotFoundError(f"Decomposition file not found: {file_path}")
+        raise FileNotFoundError(
+            "Decomposition file not found: "
+            f"{file_path}. This repository does not ship real decomposition "
+            "datasets; generate local files with your own data credentials "
+            "(for example via cay_data/build_components_from_s14.py and "
+            "cay_data/build_extension_data.py)."
+        )
 
     df = pd.read_csv(file_path)
     if "quarter" not in df.columns:

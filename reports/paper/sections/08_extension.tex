@@ -1,11 +1,14 @@
 \section{Extension: Regional CAY Decomposition}
 \label{sec:extension}
 
-This section is populated automatically when the extension pipeline is run.
-See \texttt{cay\_lab/reporting/generate.py} and the combined report section
-generated at \texttt{cay\_lab/output/reports/combined\_replication\_extension.tex}.
+This section reports a replication-style extension that replaces baseline
+$cay$ with a regional-proxy construction, $cay_R$, from
+\texttt{cay\_components\_region\_ca\_il\_tx\_q\_proxy.csv}. All downstream
+forecasting specifications remain unchanged.
 
-To include full extension results in a compiled report, add:
-\begin{verbatim}
-\input{cay_lab/output/reports/combined_replication_extension.tex}
-\end{verbatim}
+\IfFileExists{../../cay_lab/output/reports/combined_replication_extension.tex}{
+  \input{../../cay_lab/output/reports/combined_replication_extension.tex}
+}{
+  \textbf{Extension results not built.} Run:
+  \texttt{doit -f cay\_lab/dodo.py generate\_combined\_report}
+}

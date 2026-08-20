@@ -13,11 +13,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 from statsmodels.tools import add_constant
 
 from cay_lab.analysis.predictive_regression import PredictiveRegression
+from src.analysis.conventions import select_panel_conventions
+from src.analysis.estimate_cay import estimate_cay
+from src.analysis.figure_1 import plot_figure_1, prepare_figure_1
+from src.analysis.modes import estimate_analysis_modes
+from src.analysis.table_ii import TableIIResult, build_table_ii
+from src.analysis.table_iii import build_table_iii
+from src.analysis.table_r1 import load_paper_targets
+from src.analysis.table_vi import build_table_vi
+from src.data.build_quarterly_panel import HISTORICAL_INDEX, latest_common_quarter
 
 if TYPE_CHECKING:
     from cay_lab.settings import ExtensionSettings
@@ -177,6 +187,12 @@ EXTENSION_ARTIFACT_STEMS = (
     "extension_qa",
 )
 
+REGION_PROXY_COMPONENT_COLUMNS = (
+    "housing_proxy_scaled_million_usd",
+    "financial_proxy_scaled_million_usd",
+    "liquid_proxy_scaled_million_usd",
+)
+
 
 def generate_extension_report_artifacts(
     panel: pd.DataFrame,
@@ -268,23 +284,148 @@ def generate_extension_report_artifacts(
 # ---------------------------------------------------------------------------
 
 
+def _apply_selected_conventions(
+    panel: pd.DataFrame, targets_path: Path
+) -> pd.DataFrame:
+    targets = load_paper_targets(targets_path)
+    modes = estimate_analysis_modes(panel, leads_lags=8)
+    selection_panel = panel.reindex(HISTORICAL_INDEX).copy()
+    selection_panel["cay"] = modes.paper_inputs.cay
+    selections = select_panel_conventions(selection_panel, targets)
+    result = panel.copy()
+    bill_column, relative_column = {
+        "bill_30d": ("bill_30d_return", "relative_bill_rate_30d"),
+        "bill_3m": ("bill_3m_return", "relative_bill_rate_3m"),
+    }[selections.risk_free.selected]
+    term_column = {
+        "term_10y_3m": "term_spread_10y_3m",
+        "term_10y_1y": "term_spread_10y_1y",
+    }[selections.term_spread.selected]
+    result["relative_bill_rate"] = result[relative_column]
+    result["term_spread"] = result[term_column]
+    result["sp_excess_return"] = result["sp_real_return"] - result[bill_column]
+    result["crsp_vw_excess_return"] = result["crsp_vw_real_return"] - result[bill_column]
+    return result
+
+
+def _table_ii_frame(result: TableIIResult) -> pd.DataFrame:
+    correlations = result.correlations.reset_index(names="variable")
+    correlations.insert(0, "panel", "correlations")
+    summary = result.summary.reset_index(names="variable")
+    summary.insert(0, "panel", "summary")
+    return pd.concat([correlations, summary], ignore_index=True, sort=False)
+
+
+def _build_cay_r_series(core_panel: pd.DataFrame, region_csv_path: Path) -> pd.Series:
+    region_raw = pd.read_csv(region_csv_path)
+    required = {"quarter", *REGION_PROXY_COMPONENT_COLUMNS}
+    missing = sorted(required - set(region_raw.columns))
+    if missing:
+        raise ValueError(
+            f"Regional proxy CSV is missing required columns for cay_R: {missing}"
+        )
+    region_raw["quarter"] = pd.PeriodIndex(region_raw["quarter"].astype(str), freq="Q")
+    region_panel = (
+        region_raw.groupby("quarter")[list(REGION_PROXY_COMPONENT_COLUMNS)]
+        .sum(min_count=1)
+        .sort_index()
+    )
+    total_wealth_proxy = region_panel.sum(axis=1, min_count=1)
+    if (total_wealth_proxy <= 0).any():
+        raise ValueError("Regional wealth proxy contains non-positive values.")
+    proxy_frame = pd.DataFrame(index=core_panel.index)
+    proxy_frame["c"] = core_panel["c"]
+    proxy_frame["y"] = core_panel["y"]
+    proxy_frame["a"] = np.log(total_wealth_proxy).reindex(core_panel.index)
+    proxy_frame = proxy_frame.dropna(subset=["c", "a", "y"])
+    if proxy_frame.empty:
+        raise ValueError("No overlapping quarterly sample to estimate cay_R.")
+    return estimate_cay(proxy_frame, leads_lags=8).cay.rename("cay_R")
+
+
+def _write_extension_replication_artifacts(
+    ext_reports_dir: Path,
+    core_panel_path: Path,
+    region_csv_path: Path,
+    targets_path: Path,
+) -> dict[str, object]:
+    panel = pd.read_parquet(core_panel_path)
+    if not isinstance(panel.index, pd.PeriodIndex):
+        panel.index = pd.PeriodIndex(panel.index, freq="Q")
+    canonical = _apply_selected_conventions(panel, targets_path)
+    cay_r = _build_cay_r_series(canonical, region_csv_path)
+    extension_panel = canonical.copy()
+    extension_panel["cay"] = cay_r.reindex(extension_panel.index)
+    extension_panel = extension_panel.loc[
+        : latest_common_quarter(
+            extension_panel,
+            ["cay", "sp_excess_return", "dividend_yield", "relative_bill_rate"],
+        )
+    ]
+
+    table_ii = build_table_ii(extension_panel)
+    table_iii = build_table_iii(extension_panel)
+    table_vi = build_table_vi(extension_panel)
+    figure_1 = prepare_figure_1(extension_panel)
+
+    tables_dir = ext_reports_dir / "tables"
+    figures_dir = ext_reports_dir / "figures"
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    table_ii_csv = tables_dir / "table_ii_extension_cay_r.csv"
+    table_ii_tex = tables_dir / "table_ii_extension_cay_r.tex"
+    table_iii_csv = tables_dir / "table_iii_extension_cay_r.csv"
+    table_iii_tex = tables_dir / "table_iii_extension_cay_r.tex"
+    table_vi_csv = tables_dir / "table_vi_extension_cay_r.csv"
+    table_vi_tex = tables_dir / "table_vi_extension_cay_r.tex"
+
+    _table_ii_frame(table_ii).to_csv(table_ii_csv, index=False)
+    _table_ii_frame(table_ii).to_latex(table_ii_tex, index=False, escape=True)
+    table_iii.to_csv(table_iii_csv, index=False)
+    table_iii.to_latex(table_iii_tex, index=False, escape=True)
+    table_vi.to_csv(table_vi_csv, index=False)
+    table_vi.to_latex(table_vi_tex, index=False, escape=True)
+
+    figure = plot_figure_1(figure_1)
+    figure_pdf = figures_dir / "figure_1_extension_cay_r.pdf"
+    figure_png = figures_dir / "figure_1_extension_cay_r.png"
+    figure_tex = figures_dir / "figure_1_extension_cay_r.tex"
+    figure.savefig(figure_pdf, bbox_inches="tight")
+    figure.savefig(figure_png, dpi=180, bbox_inches="tight")
+    plt.close(figure)
+    figure_tex.write_text(
+        "\n".join(
+            [
+                r"\begin{figure}[htbp]",
+                r"\centering",
+                r"\includegraphics[width=\linewidth]{../../cay_lab/output/reports/figures/figure_1_extension_cay_r.pdf}",
+                r"\caption{Standardized $cay_R$ and excess S\&P returns.}",
+                r"\label{fig:figure_1_extension_cay_r}",
+                r"\end{figure}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "sample_start": str(figure_1.index.min()),
+        "sample_end": str(figure_1.index.max()),
+        "table_ii_tex": table_ii_tex,
+        "figure_1_tex": figure_tex,
+        "table_iii_tex": table_iii_tex,
+        "table_vi_tex": table_vi_tex,
+    }
+
+
 def write_extension_report_section(
     ext_reports_dir: Path,
     replication_reports_dir: Path,
     settings: "ExtensionSettings",
 ) -> Path:
-    """Write a LaTeX section combining replication summary + extension results.
-
-    The replication section is included via ``\\input{}`` so its content is
-    never duplicated or modified.  Extension tables/figures are embedded
-    directly.
-    """
+    """Write extension-only LaTeX content for the main report section 08."""
     ext_reports_dir.mkdir(parents=True, exist_ok=True)
-
-    repl_section = replication_reports_dir / "paper" / "sections" / "03_replication.tex"
-    repl_input = (
-        rf"\input{{{repl_section}}}" if repl_section.exists() else "% replication section not found"
-    )
 
     qa_path = settings.output_dir / "extension_qa.json"
     qa: dict = {}
@@ -296,15 +437,40 @@ def write_extension_report_section(
     status_counts = qa.get("status_counts", {})
     status_str = "; ".join(f"{k}: {v}" for k, v in sorted(status_counts.items()))
 
-    chartbook_path = settings.output_dir / "extension_chartbook.pdf"
-    rolling_path = settings.output_dir / "extension_rolling.csv"
+    core_panel_candidates = (
+        settings.project_root / "_data" / "processed" / "core_quarterly.parquet",
+        settings.project_root / "data" / "processed" / "core_quarterly.parquet",
+    )
+    core_panel_path = next((p for p in core_panel_candidates if p.exists()), core_panel_candidates[0])
+    region_csv_path = settings.cay_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
+    targets_path = settings.project_root / "config" / "paper_targets.yml"
 
-    # Use a relative path so the .tex file compiles portably on any machine.
-    try:
-        chartbook_rel = chartbook_path.relative_to(ext_reports_dir)
-    except ValueError:
-        # Falls back to absolute path when they share no common prefix (rare).
-        chartbook_rel = chartbook_path
+    extension_exhibit_inputs = ""
+    sample_window = "N/A"
+    if core_panel_path.exists():
+        extension_outputs = _write_extension_replication_artifacts(
+            ext_reports_dir,
+            core_panel_path,
+            region_csv_path,
+            targets_path,
+        )
+        sample_window = (
+            f"{extension_outputs['sample_start']}--{extension_outputs['sample_end']}"
+        )
+        extension_exhibit_inputs = textwrap.dedent(
+            r"""
+            \subsection{Replication-Style Results with $cay_R$}
+            \input{../../cay_lab/output/reports/tables/table_ii_extension_cay_r.tex}
+            \input{../../cay_lab/output/reports/figures/figure_1_extension_cay_r.tex}
+            \input{../../cay_lab/output/reports/tables/table_iii_extension_cay_r.tex}
+            \input{../../cay_lab/output/reports/tables/table_vi_extension_cay_r.tex}
+            """
+        ).strip()
+    else:
+        extension_exhibit_inputs = (
+            r"\textbf{Extension exhibits unavailable:} run the core panel and "
+            r"\texttt{doit -f cay\_lab/dodo.py generate\_combined\_report}."
+        )
 
     tex = textwrap.dedent(
         rf"""
@@ -313,57 +479,51 @@ def write_extension_report_section(
         %  Auto-generated by cay_lab.reporting.generate
         % ============================================================
 
-        \section{{Replication Results}}
-
-        {repl_input}
-
-        % ============================================================
-        \section{{Extension: Regional CAY Decomposition}}
-        % ============================================================
-
         \subsection{{Overview}}
 
-        This section extends the national-level CAY analysis by decomposing
-        wealth components into state-level proxies for California, Illinois,
-        and Texas using the \texttt{{cay\_components\_region}} dataset.
-        The extension pipeline mirrors the replication workflow
-        (acquire $\to$ normalise $\to$ panel $\to$ analysis $\to$ report)
-        while preserving all replication artifacts unchanged.
+        This extension constructs a Regional Replication predictor, denoted $cay_R$,
+        from \texttt{{cay\_components\_region\_ca\_il\_tx\_q\_proxy.csv}} and
+        reruns the replication-style forecasting pipeline with the
+        \textit{{same model specifications}} used in the main report,
+        replacing only the $cay$ construction.
 
         \subsection{{Data and Methodology}}
 
         Regional wealth proxies are derived by scaling national Households and
         Nonprofit Organisations (HNPO) quarterly components by within-state
-        shares, estimated from FRED house price indices (HPI), per capita
-        personal income, population, and (where available) FDIC branch deposit
-        data.  The resulting panel covers regions: \textit{{{segments_str}}}.
+        shares for California, Illinois, and Texas. We aggregate the regional
+        proxy wealth levels by quarter, map them to the asset-wealth term in
+        the DLS cointegrating regression, and estimate $cay_R$ with the same
+        lead/lag settings as the baseline pipeline.
 
-        \subsection{{Predictivity Results}}
+        \subsection{{Coverage}}
 
-        Sub-CAY predictors are constructed as log-level deviations from each
-        region's expanding historical mean.  A rolling OLS regression with
-        Newey--West standard errors forecasts one-quarter-ahead wealth-component
-        growth using a \textit{{{qa.get('train_periods', 'N/A')}}}-quarter
-        training window.
+        Regions included: \textit{{{segments_str}}}.  Estimated $cay_R$ sample:
+        \textit{{{sample_window}}}. Rolling extension QA summary:
+        {status_str if status_str else 'no rolling results produced'}.
 
-        \begin{{figure}}[htbp]
-          \centering
-          \includegraphics[width=\linewidth]{{{chartbook_rel}}}
-          \caption{{Sub-CAY predictivity chartbook for regional decomposition.
-                    Each page shows actual vs.\ predicted future growth,
-                    rolling in-sample $R^2$, rolling HAC $t$-statistics,
-                    and absolute forecast error for one region.}}
-          \label{{fig:ext_chartbook}}
-        \end{{figure}}
+        {extension_exhibit_inputs}
 
-        Rolling forecast QA summary: {status_str if status_str else 'no rolling results produced'}.
-        Full rolling results are available in \texttt{{{rolling_path.name}}}.
+        \subsection{{How to Read the Extension Figure}}
+
+        Figure \ref{{fig:figure_1_extension_cay_r}} follows the same display
+        convention as the replication figure.  Both lines are standardized in
+        displayed-sample units, so crossings indicate relative (not level)
+        comovement.  Gray recession shading marks NBER downturn quarters.
+        Sustained periods where $cay_R$ leads excess-return reversals are the
+        visual counterpart to the predictive-regression coefficients reported in
+        Tables III and VI; statistical significance should be assessed from those
+        tables rather than from line overlap alone.
+
+        Full rolling chartbook outputs remain available in
+        \texttt{{extension\_chartbook.pdf}}
+        and \texttt{{extension\_rolling.csv}}.
 
         \subsection{{Comparison with National Results}}
 
-        The regional decomposition complements the national CAY analysis:
-        predictive signal strength varies across states and wealth components,
-        suggesting heterogeneous local wealth dynamics.
+        Relative to baseline exhibits, this section isolates the impact of
+        replacing $cay$ with $cay_R$ while preserving the same downstream
+        regressions, horizons, and plotting conventions.
         """
     ).strip() + "\n"
 

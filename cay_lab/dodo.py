@@ -18,11 +18,11 @@ Usage:
     doit -f cay_lab/dodo.py chartbook --dataset wealth_groups
 Legacy chartbook example:
     doit -f cay_lab/dodo.py chartbook \
-      --sub-category house_wealth_groups \
-      --start 1990Q1 \
-      --end 2020Q4 \
-      --prediction-window 1 \
-      --risky-ticker SPY
+      --cay-decomposition house_wealth_groups \
+      --input-start 1990Q1 \
+      --input-end 2020Q4 \
+      --prediction-period 1 \
+      --risky-ticker QQQ
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ EXTENSION_ARTIFACTS = [
 ]
 COMBINED_REPORT = SETTINGS.reports_dir / "combined_replication_extension.tex"
 REGION_SOURCE_CSV = (
-    PROJECT_ROOT / "cay_data" / "cay_components_region_ca_il_tx_q_proxy.csv"
+    SETTINGS.cay_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
 )
 
 from cay_lab.analysis.predictive_regression import PredictiveRegression  # noqa: E402
@@ -116,6 +116,21 @@ def _validate_period_bounds(start: str | None, end: str | None) -> None:
         )
 
 
+def _parse_risky_tickers(
+    risky_tickers: str | None,
+    risky_ticker: str | None,
+) -> list[str]:
+    raw = risky_tickers if risky_tickers else risky_ticker
+    if not raw:
+        return []
+    tokens = [token.strip().upper() for token in raw.split(",") if token.strip()]
+    deduped: list[str] = []
+    for token in tokens:
+        if token not in deduped:
+            deduped.append(token)
+    return deduped
+
+
 def _fetch_risky_asset_quarterly_prices(
     ticker: str,
     start: str | None,
@@ -130,12 +145,44 @@ def _fetch_risky_asset_quarterly_prices(
 
     start_ts = pd.Period(start, freq="Q").to_timestamp(how="start") if start else None
     end_ts = pd.Period(end, freq="Q").to_timestamp(how="end") if end else None
-    raw_prices = web.DataReader(
-        ticker_clean,
-        data_source,
-        start=start_ts,
-        end=end_ts,
-    )
+    try:
+        raw_prices = web.DataReader(
+            ticker_clean,
+            data_source,
+            start=start_ts,
+            end=end_ts,
+        )
+    except NotImplementedError:
+        if data_source not in {"stooq", "yahoo"}:
+            raise
+        try:
+            import yfinance as yf
+        except ImportError as exc:
+            raise RuntimeError(
+                "Risky-asset fallback requires yfinance when pandas-datareader "
+                f"source '{data_source}' is unavailable."
+            ) from exc
+
+        end_download = None if end_ts is None else end_ts + pd.Timedelta(days=1)
+        raw_prices = yf.download(
+            ticker_clean,
+            start=start_ts,
+            end=end_download,
+            interval="1d",
+            progress=False,
+            auto_adjust=False,
+        )
+        if raw_prices.empty:
+            raise RuntimeError(
+                f"No market data returned for ticker '{ticker_clean}' "
+                "from yfinance fallback."
+            )
+        if not isinstance(raw_prices.index, pd.DatetimeIndex):
+            raise RuntimeError(
+                f"Fallback market data index for ticker '{ticker_clean}' "
+                "is not DatetimeIndex."
+            )
+        raw_prices.index = raw_prices.index.tz_localize(None)
     if raw_prices.empty:
         raise RuntimeError(
             f"No market data returned for ticker '{ticker_clean}' from '{data_source}'."
@@ -146,11 +193,24 @@ def _fetch_risky_asset_quarterly_prices(
         )
 
     raw_prices = raw_prices.sort_index()
-    price_col = next(
-        (col for col in ("Adj Close", "Close", "close") if col in raw_prices.columns),
-        None,
-    )
-    if price_col is None:
+    price_series: pd.Series | None = None
+    candidate_cols = ("Adj Close", "Close", "close")
+    if isinstance(raw_prices.columns, pd.MultiIndex):
+        level0 = set(raw_prices.columns.get_level_values(0))
+        for candidate in candidate_cols:
+            if candidate in level0:
+                candidate_frame = raw_prices[candidate]
+                if isinstance(candidate_frame, pd.DataFrame):
+                    price_series = candidate_frame.iloc[:, 0]
+                else:
+                    price_series = candidate_frame
+                break
+    else:
+        price_col = next((col for col in candidate_cols if col in raw_prices.columns), None)
+        if price_col is not None:
+            price_series = raw_prices[price_col]
+
+    if price_series is None:
         available_cols = ", ".join(str(c) for c in raw_prices.columns)
         raise RuntimeError(
             f"Market data for ticker '{ticker_clean}' is missing a close price column. "
@@ -158,7 +218,7 @@ def _fetch_risky_asset_quarterly_prices(
         )
 
     quarterly_prices = (
-        pd.to_numeric(raw_prices[price_col], errors="coerce")
+        pd.to_numeric(price_series, errors="coerce")
         .dropna()
         .resample("QE-DEC")
         .last()
@@ -175,19 +235,27 @@ def _fetch_risky_asset_quarterly_prices(
 
 
 def _build_risky_asset_target(
-    quarterly_prices: pd.Series,
+    quarterly_prices: pd.Series | pd.DataFrame,
     prediction_window: int,
 ) -> pd.DataFrame:
     if prediction_window <= 0:
         raise ValueError("prediction_window must be positive.")
     if not isinstance(quarterly_prices.index, pd.PeriodIndex):
         raise ValueError("quarterly_prices must be indexed by a quarterly PeriodIndex.")
-    target = np.log(quarterly_prices.shift(-prediction_window)) - np.log(quarterly_prices)
-    return pd.DataFrame(
-        {
-            "risky_asset_price": quarterly_prices,
-            "target_risky_return": target,
-        }
+    if isinstance(quarterly_prices, pd.Series):
+        target = np.log(quarterly_prices.shift(-prediction_window)) - np.log(quarterly_prices)
+        return pd.DataFrame(
+            {
+                "risky_asset_price": quarterly_prices,
+                "target_risky_return": target,
+            }
+        )
+    component_targets = np.log(quarterly_prices.shift(-prediction_window)) - np.log(
+        quarterly_prices
+    )
+    equal_weight_target = component_targets.mean(axis=1).rename("target_risky_return")
+    return component_targets.add_prefix("target_risky_return_").assign(
+        target_risky_return=equal_weight_target
     )
 
 
@@ -293,7 +361,7 @@ def _write_chartbook(
     target_label: str,
     start: str | None,
     end: str | None,
-    risky_ticker: str | None,
+    risky_tickers: list[str] | None,
 ) -> None:
     with PdfPages(pdf_path) as pdf:
         fig, ax = plt.subplots(figsize=(11, 8.5))
@@ -308,7 +376,7 @@ def _write_chartbook(
             f"Prediction horizon (quarters): {prediction_window}",
             f"Target component: {target_component}",
             f"Target series: {target_label}",
-            f"Risky asset ticker: {risky_ticker or '(not used)'}",
+            f"Risky asset tickers: {', '.join(risky_tickers) if risky_tickers else '(not used)'}",
             f"Predictors: {', '.join(predictor_cols)}",
             "",
             f"Prepared observations: {len(prepared_df):,}",
@@ -367,22 +435,29 @@ def _write_chartbook(
 
 def build_chartbook(
     sub_category: str = "house_wealth_groups",
+    cay_decomposition: str = "",
     dataset: str = "wealth_groups",
     train_periods: int = 40,
     prediction_window: int = 1,
+    prediction_period: int = 0,
     target_component: str = "financial",
     output_dir: str = str(DEFAULT_OUTPUT_DIR),
     min_history_periods: int = 8,
     start: str = "",
+    input_start: str = "",
     end: str = "",
+    input_end: str = "",
     risky_ticker: str = "",
+    risky_tickers: str = "",
     risky_data_source: str = "stooq",
 ) -> None:
     """Create model outputs and a PDF chartbook for sub-cay predictivity."""
-    sub_category = sub_category or None
-    start = start or None
-    end = end or None
-    risky_ticker = risky_ticker.strip().upper()
+    sub_category = (cay_decomposition or sub_category) or None
+    start = (input_start or start) or None
+    end = (input_end or end) or None
+    if prediction_period > 0:
+        prediction_window = prediction_period
+    risky_ticker_list = _parse_risky_tickers(risky_tickers, risky_ticker)
 
     dataset_key = _resolve_dataset_key(dataset=dataset, sub_category=sub_category)
     _validate_period_bounds(start=start, end=end)
@@ -403,13 +478,18 @@ def build_chartbook(
     ).copy()
     target_col = "target_future_growth"
     target_label = f"{target_component} future log growth"
-    if risky_ticker:
-        risky_prices = _fetch_risky_asset_quarterly_prices(
-            ticker=risky_ticker,
-            start=start,
-            end=end,
-            data_source=risky_data_source,
-        )
+    if risky_ticker_list:
+        risky_price_columns = []
+        for ticker in risky_ticker_list:
+            risky_price_columns.append(
+                _fetch_risky_asset_quarterly_prices(
+                    ticker=ticker,
+                    start=start,
+                    end=end,
+                    data_source=risky_data_source,
+                ).rename(ticker)
+            )
+        risky_prices = pd.concat(risky_price_columns, axis=1, join="inner").dropna()
         risky_target = _build_risky_asset_target(
             quarterly_prices=risky_prices,
             prediction_window=prediction_window,
@@ -417,7 +497,9 @@ def build_chartbook(
         prepared = prepared.join(risky_target, how="inner")
         prepared = prepared.dropna(subset=["target_risky_return"])
         target_col = "target_risky_return"
-        target_label = f"{risky_ticker} future log return"
+        target_label = (
+            f"Equal-weight basket ({', '.join(risky_ticker_list)}) future log return"
+        )
     if prepared.empty:
         raise RuntimeError(
             "No prepared observations remain after applying sample and target filters."
@@ -472,7 +554,7 @@ def build_chartbook(
         target_label=target_label,
         start=start,
         end=end,
-        risky_ticker=risky_ticker or None,
+        risky_tickers=risky_ticker_list or None,
     )
 
 
@@ -495,6 +577,16 @@ def task_chartbook():
                 "type": str,
                 "help": (
                     "User-facing CAY sub-category: "
+                    "asset_wealth, region, house_wealth_groups"
+                ),
+            },
+            {
+                "name": "cay_decomposition",
+                "long": "cay-decomposition",
+                "default": "",
+                "type": str,
+                "help": (
+                    "Primary decomposition option: "
                     "asset_wealth, region, house_wealth_groups"
                 ),
             },
@@ -523,6 +615,13 @@ def task_chartbook():
                 "help": "Prediction horizon in quarters",
             },
             {
+                "name": "prediction_period",
+                "long": "prediction-period",
+                "default": 0,
+                "type": int,
+                "help": "Alias of prediction-window (quarters); overrides when > 0",
+            },
+            {
                 "name": "start",
                 "long": "start",
                 "default": "",
@@ -530,11 +629,25 @@ def task_chartbook():
                 "help": "Sample start quarter (e.g., 1990Q1). Leave empty for full span.",
             },
             {
+                "name": "input_start",
+                "long": "input-start",
+                "default": "",
+                "type": str,
+                "help": "Input range start quarter (alias of --start).",
+            },
+            {
                 "name": "end",
                 "long": "end",
                 "default": "",
                 "type": str,
                 "help": "Sample end quarter (e.g., 2020Q4). Leave empty for full span.",
+            },
+            {
+                "name": "input_end",
+                "long": "input-end",
+                "default": "",
+                "type": str,
+                "help": "Input range end quarter (alias of --end).",
             },
             {
                 "name": "target_component",
@@ -549,9 +662,17 @@ def task_chartbook():
                 "default": "",
                 "type": str,
                 "help": (
-                    "Risky asset ticker (e.g., SPY). "
-                    "When set, predictivity target switches to this asset's "
-                    "future quarterly log return."
+                    "Single risky asset ticker (e.g., QQQ). "
+                    "Use --risky-tickers for multiple assets."
+                ),
+            },
+            {
+                "name": "risky_tickers",
+                "long": "risky-tickers",
+                "default": "",
+                "type": str,
+                "help": (
+                    "Comma-separated risky-asset tickers (e.g., QQQ or QQQ,SPY)."
                 ),
             },
             {
@@ -591,7 +712,7 @@ def task_import_region_data():
     Analogous to ``task_normalize_pulled_sources`` in the root dodo.
     """
     return {
-        "actions": [lambda: import_region_data(SETTINGS)],
+        "actions": [_run_import_region_data],
         "file_dep": [str(REGION_SOURCE_CSV)],
         "targets": [str(REGION_NORMALIZED_PARQUET), str(REGION_NORMALIZED_META)],
         "verbosity": 2,
@@ -604,7 +725,7 @@ def task_build_extension_panel():
     Analogous to ``task_build_panel`` in the root dodo.
     """
     return {
-        "actions": [lambda: build_extension_panel(SETTINGS)],
+        "actions": [_run_build_extension_panel],
         "file_dep": [str(REGION_NORMALIZED_PARQUET)],
         "targets": [str(PANEL_PARQUET), str(PANEL_META)],
         "task_dep": ["import_region_data"],
@@ -620,7 +741,7 @@ def task_generate_extension_exhibits():
     extension_chartbook.pdf, extension_qa.json.
     """
     return {
-        "actions": [lambda: generate_extension_exhibits(SETTINGS)],
+        "actions": [_run_generate_extension_exhibits],
         "file_dep": [str(PANEL_PARQUET)],
         "targets": [str(p) for p in EXTENSION_ARTIFACTS],
         "task_dep": ["build_extension_panel"],
@@ -634,7 +755,7 @@ def task_generate_combined_report():
     Analogous to the report stage in root dodo.
     """
     return {
-        "actions": [lambda: generate_combined_report(SETTINGS)],
+        "actions": [_run_generate_combined_report],
         "file_dep": [str(SETTINGS.output_dir / "extension_qa.json")],
         "targets": [str(COMBINED_REPORT)],
         "task_dep": ["generate_extension_exhibits"],
@@ -650,3 +771,23 @@ DOIT_CONFIG = {
         "generate_combined_report",
     ]
 }
+
+
+def _run_import_region_data() -> bool:
+    import_region_data(SETTINGS)
+    return True
+
+
+def _run_build_extension_panel() -> bool:
+    build_extension_panel(SETTINGS)
+    return True
+
+
+def _run_generate_extension_exhibits() -> bool:
+    generate_extension_exhibits(SETTINGS)
+    return True
+
+
+def _run_generate_combined_report() -> bool:
+    generate_combined_report(SETTINGS)
+    return True

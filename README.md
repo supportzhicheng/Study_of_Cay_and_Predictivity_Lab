@@ -257,16 +257,18 @@ generate_combined_report(settings)
 
 ## Data Guide (for decomposition extension)
 
-All extension data lives in `cay_data/`.
+Extension decomposition datasets are **not committed as real data** in this
+repository. Users must pull/build them locally with their own credentials.
+Local files are expected under `cay_data/`.
 
 ### What each dataset means
 
 | File | What it contains | Frequency | Unit |
 |---|---|---|---|
-| `cay_data/cay_components_households_q.csv` | Household-only asset-class decomposition (`housing`, `financial`, `liquid`) | Quarterly | Million USD |
-| `cay_data/cay_components_hnpo_q.csv` | Households + nonprofits asset-class decomposition (`housing`, `financial`, `liquid`) | Quarterly | Million USD |
-| `cay_data/cay_components_wealth_groups_q.csv` | Wealth-group decomposition (`top10`, `middle40`, `bottom50`) with asset classes | Quarterly | Million USD |
-| `cay_data/cay_components_region_ca_il_tx_q_proxy.csv` | Regional decomposition proxy for California, Illinois, Texas with asset-class shares and scaled levels | Quarterly | Shares + million-USD scaled proxy |
+| `cay_data/cay_components_households_q.csv` (local) | Household-only asset-class decomposition (`housing`, `financial`, `liquid`) | Quarterly | Million USD |
+| `cay_data/cay_components_hnpo_q.csv` (local) | Households + nonprofits asset-class decomposition (`housing`, `financial`, `liquid`) | Quarterly | Million USD |
+| `cay_data/cay_components_wealth_groups_q.csv` (local) | Wealth-group decomposition (`top10`, `middle40`, `bottom50`) with asset classes | Quarterly | Million USD |
+| `cay_data/cay_components_region_ca_il_tx_q_proxy.csv` (local) | Regional decomposition proxy for California, Illinois, Texas with asset-class shares and scaled levels | Quarterly | Shares + million-USD scaled proxy |
 | `cay_data/series_metadata.csv` | Exact Z.1 series codes used for asset-class construction | — | — |
 | `cay_data/region_proxy_method.csv` | Exact construction rules for the regional proxy | — | — |
 | `cay_data/data_availability.csv` | Summary of what is direct data vs proxy data | — | — |
@@ -319,10 +321,14 @@ doit -f cay_lab/dodo.py chartbook \
 
 ### Key options
 
-- `--dataset`: `households`, `households_and_nonprofits`, `wealth_groups`, `region_proxy`
+- `--cay-decomposition`: `asset_wealth`, `region`, `house_wealth_groups`
+- `--dataset`: `households`, `households_and_nonprofits`, `wealth_groups`, `region_proxy` (optional low-level override)
+- `--input-start` / `--input-end`: input range in quarters
 - `--train-periods`: rolling training sample length in quarters
-- `--prediction-window`: forecast horizon in quarters
+- `--prediction-period` (or `--prediction-window`): forecast horizon in quarters
 - `--target-component`: `housing`, `financial`, or `liquid`
+- `--risky-ticker`: single risky-asset ticker (e.g. `QQQ`)
+- `--risky-tickers`: comma-separated risky-asset tickers (e.g. `QQQ,SPY`) for a multi-asset target
 - `--output-dir`: output folder (default: `cay_lab/output`)
 - `--min-history-periods`: minimum history for the expanding-mean sub-cay transform
 
