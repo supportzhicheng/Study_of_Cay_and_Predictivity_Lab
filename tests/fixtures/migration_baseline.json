@@ -3,6 +3,7 @@
     "python_version": "3.11",
     "pytest_collected": 137,
     "pytest_passed": 136,
+    "pytest_failed": 0,
     "pytest_blocked": 1,
     "processed_panel_sha256": "0d6643bd2eea7b47f61c8dcd74f4374cc9d1025a5b8fa5f07a1c95f5d4abe485",
     "generated_table_files": 16,

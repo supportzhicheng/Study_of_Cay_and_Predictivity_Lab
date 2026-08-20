@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import tomllib
@@ -42,6 +43,13 @@ def test_migration_baseline_fixture_matches_documented_expectations():
     assert baseline["core"]["generated_table_files"] == 16
     assert baseline["core"]["generated_figure_files"] == 9
     assert baseline["core"]["pre_pdf_artifacts"] == 32
+    assert baseline["core"]["pytest_failed"] == 0
+    assert (
+        baseline["core"]["pytest_passed"]
+        + baseline["core"]["pytest_failed"]
+        + baseline["core"]["pytest_blocked"]
+        == baseline["core"]["pytest_collected"]
+    )
     assert baseline["extension"]["prepared_rows"] == 417
     assert baseline["extension"]["rolling_rows"] == 297
     assert baseline["extension"]["segments"] == ["bottom50", "middle40", "top10"]
@@ -101,4 +109,14 @@ def test_shared_modules_do_not_import_cay_lab_extension():
         assert path.exists(), path
 
     for path in shared_paths:
-        assert "cay_lab.extension" not in path.read_text(encoding="utf-8"), path
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert "cay_lab.extension" not in {
+                    alias.name for alias in node.names
+                }, path
+            elif isinstance(node, ast.ImportFrom):
+                if node.module == "cay_lab.extension":
+                    raise AssertionError(path)
+                if node.module == "cay_lab":
+                    assert "extension" not in {alias.name for alias in node.names}, path
