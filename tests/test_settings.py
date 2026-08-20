@@ -15,6 +15,12 @@ def test_repository_relative_defaults(tmp_path: Path):
     assert settings.reports_dir == tmp_path / "reports"
     assert settings.p10_input_dir == tmp_path / "_data" / "input"
     assert settings.p10_reference_dir == tmp_path / "asset"
+    assert settings.extension_data_dir == tmp_path / "cay_data"
+    assert settings.extension_output_dir == tmp_path / "_output" / "extension"
+    assert (
+        settings.extension_reports_dir == tmp_path / "reports" / "paper" / "generated"
+    )
+    assert settings.extension_input_dir == tmp_path / "_data" / "input" / "extension"
     assert settings.historical_start == "1952Q4"
     assert settings.historical_end == "1998Q3"
 

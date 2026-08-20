@@ -1,77 +1,25 @@
-"""doit tasks for the CAY extension (cay_components_region) pipeline.
-
-The staged tasks mirror the replication workflow in the root ``dodo.py``:
-  1. import_region_data     – validate & normalise raw region CSV
-  2. build_extension_panel  – prepare predictivity panel (parquet)
-  3. generate_extension_exhibits – run analysis, chartbook PDF + CSVs
-  4. generate_combined_report    – write combined replication+extension .tex
-
-Legacy ``chartbook`` task is preserved for backward compatibility and
-now delegates to the staged pipeline (uses the prepared panel).
-
-Usage:
-    doit -f cay_lab/dodo.py                           # run all staged tasks
-    doit -f cay_lab/dodo.py import_region_data
-    doit -f cay_lab/dodo.py build_extension_panel
-    doit -f cay_lab/dodo.py generate_extension_exhibits
-    doit -f cay_lab/dodo.py generate_combined_report
-    doit -f cay_lab/dodo.py chartbook --dataset wealth_groups
-Legacy chartbook example:
-    doit -f cay_lab/dodo.py chartbook \
-      --cay-decomposition house_wealth_groups \
-      --input-start 1990Q1 \
-      --input-end 2020Q4 \
-      --prediction-period 1 \
-      --risky-ticker QQQ
-"""
+"""Generate configurable sub-CAY predictivity chartbooks."""
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from matplotlib.backends.backend_pdf import PdfPages
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-import matplotlib.pyplot as plt  # noqa: E402  (kept for legacy task)
-import pandas as pd  # noqa: E402
-from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
-from statsmodels.tools import add_constant  # noqa: E402
-
-from cay_lab.pipeline import (  # noqa: E402
-    PANEL_STEM,
-    REGION_NORMALIZED_STEM,
-    build_extension_panel,
-    generate_combined_report,
-    generate_extension_exhibits,
-    import_region_data,
+from src.extension.loader import prepare_predictivity_dataset
+from src.extension.predictivity import (
+    rolling_predictivity as _rolling_predictivity,
 )
-from cay_lab.settings import load_extension_settings  # noqa: E402
-
-SETTINGS = load_extension_settings()
-REGION_NORMALIZED_PARQUET = SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
-REGION_NORMALIZED_META = SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
-PANEL_PARQUET = SETTINGS.output_dir / f"{PANEL_STEM}.parquet"
-PANEL_META = SETTINGS.output_dir / f"{PANEL_STEM}.metadata.json"
-EXTENSION_ARTIFACTS = [
-    SETTINGS.output_dir / "extension_prepared.csv",
-    SETTINGS.output_dir / "extension_rolling.csv",
-    SETTINGS.output_dir / "extension_chartbook.pdf",
-    SETTINGS.output_dir / "extension_qa.json",
-]
-COMBINED_REPORT = SETTINGS.reports_dir / "combined_replication_extension.tex"
-REGION_SOURCE_CSV = (
-    SETTINGS.cay_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
+from src.extension.predictivity import (
+    segment_predictivity_tests as _segment_predictivity_tests,
 )
 
-from cay_lab.analysis.predictive_regression import PredictiveRegression  # noqa: E402
-from cay_lab.data.loader import prepare_predictivity_dataset  # noqa: E402
-
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "cay_lab" / "output"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "_output" / "extension"
 SUB_CATEGORY_DATASET_MAP = {
     "asset_wealth": "households_and_nonprofits",
     "region": "region_proxy",
@@ -145,11 +93,11 @@ def _fetch_risky_asset_quarterly_prices(
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir / f"{ticker_symbol}.csv"
 
-    def _extract_price_series(raw_prices: pd.DataFrame, ticker_symbol: str) -> pd.Series:
+    def _extract_price_series(
+        raw_prices: pd.DataFrame, ticker_symbol: str
+    ) -> pd.Series:
         if raw_prices.empty:
-            raise RuntimeError(
-                f"No market data returned for ticker '{ticker_symbol}'."
-            )
+            raise RuntimeError(f"No market data returned for ticker '{ticker_symbol}'.")
         if not isinstance(raw_prices.index, pd.DatetimeIndex):
             raise RuntimeError(
                 f"Market data index for ticker '{ticker_symbol}' is not DatetimeIndex."
@@ -194,7 +142,9 @@ def _fetch_risky_asset_quarterly_prices(
             )
         date_index = pd.to_datetime(cached["date"], errors="coerce")
         price_series = pd.to_numeric(cached["price"], errors="coerce")
-        out = pd.Series(price_series.values, index=date_index, name=ticker_symbol).dropna()
+        out = pd.Series(
+            price_series.values, index=date_index, name=ticker_symbol
+        ).dropna()
         if out.empty:
             raise RuntimeError(f"Market cache file {cache_path} has no valid rows.")
         if out.index.tz is not None:
@@ -213,7 +163,10 @@ def _fetch_risky_asset_quarterly_prices(
         cached_quarters = cached_prices.index.to_period("Q")
         requested_start = pd.Period(start, freq="Q") if start else cached_quarters.min()
         requested_end = pd.Period(end, freq="Q") if end else cached_quarters.max()
-        if cached_quarters.min() <= requested_start and cached_quarters.max() >= requested_end:
+        if (
+            cached_quarters.min() <= requested_start
+            and cached_quarters.max() >= requested_end
+        ):
             quarterly_prices = cached_prices.resample("QE-DEC").last().dropna()
             quarterly_prices.index = quarterly_prices.index.to_period("Q")
             quarterly_prices.name = "risky_asset_price"
@@ -251,7 +204,10 @@ def _fetch_risky_asset_quarterly_prices(
                     progress=False,
                     auto_adjust=False,
                 )
-                if isinstance(raw_prices.index, pd.DatetimeIndex) and raw_prices.index.tz is not None:
+                if (
+                    isinstance(raw_prices.index, pd.DatetimeIndex)
+                    and raw_prices.index.tz is not None
+                ):
                     raw_prices.index = raw_prices.index.tz_localize(None)
                 price_series = _extract_price_series(raw_prices, ticker_clean)
                 if not price_series.empty:
@@ -302,7 +258,9 @@ def _build_risky_asset_target(
     if not isinstance(quarterly_prices.index, pd.PeriodIndex):
         raise ValueError("quarterly_prices must be indexed by a quarterly PeriodIndex.")
     if isinstance(quarterly_prices, pd.Series):
-        target = np.log(quarterly_prices.shift(-prediction_window)) - np.log(quarterly_prices)
+        target = np.log(quarterly_prices.shift(-prediction_window)) - np.log(
+            quarterly_prices
+        )
         return pd.DataFrame(
             {
                 "risky_asset_price": quarterly_prices,
@@ -318,96 +276,7 @@ def _build_risky_asset_target(
     )
 
 
-def _classify_status(max_abs_t: float, t_active: float = 1.96, t_weak: float = 1.28) -> str:
-    if max_abs_t > t_active:
-        return "ACTIVE"
-    if max_abs_t > t_weak:
-        return "WEAKENED"
-    return "LOST"
-
-
-def _rolling_predictivity(
-    df: pd.DataFrame,
-    predictor_cols: list[str],
-    target_col: str,
-    train_periods: int,
-) -> pd.DataFrame:
-    rows: list[dict] = []
-    for segment, seg_df in df.groupby("segment", sort=True):
-        seg_df = seg_df.sort_index()
-        if len(seg_df) <= train_periods:
-            continue
-
-        for split in range(train_periods, len(seg_df)):
-            train = seg_df.iloc[split - train_periods:split]
-            test = seg_df.iloc[[split]]
-
-            reg = PredictiveRegression(
-                train,
-                target_col=target_col,
-                predictor_cols=predictor_cols,
-                horizon=0,
-            )
-            reg.fit()
-
-            x_test = add_constant(test[predictor_cols], has_constant="add")
-            pred = float(reg.result_.predict(x_test).iloc[0])
-            actual = float(test[target_col].iloc[0])
-            t_stats = {col: float(reg.t_stat(col)) for col in predictor_cols}
-            max_abs_t = max(abs(v) for v in t_stats.values())
-
-            row = {
-                "quarter": str(test.index[0]),
-                "segment": segment,
-                "prediction": pred,
-                "actual": actual,
-                "error": actual - pred,
-                "abs_error": abs(actual - pred),
-                "r_squared": float(reg.r_squared()),
-                "n_obs": int(reg.result_.nobs),
-                "status": _classify_status(max_abs_t),
-            }
-            for col in predictor_cols:
-                row[f"t_stat_{col}"] = t_stats[col]
-                row[f"coef_{col}"] = float(reg.result_.params[col])
-            rows.append(row)
-
-    return pd.DataFrame(rows)
-
-
-def _segment_predictivity_tests(
-    df: pd.DataFrame,
-    predictor_cols: list[str],
-    target_col: str,
-) -> pd.DataFrame:
-    rows: list[dict] = []
-    for segment, seg_df in df.groupby("segment", sort=True):
-        seg_df = seg_df.sort_index()
-        reg = PredictiveRegression(
-            seg_df,
-            target_col=target_col,
-            predictor_cols=predictor_cols,
-            horizon=0,
-        )
-        reg.fit()
-        t_stats = {col: float(reg.t_stat(col)) for col in predictor_cols}
-        max_abs_t = max(abs(v) for v in t_stats.values())
-        row = {
-            "segment": segment,
-            "r_squared": float(reg.r_squared()),
-            "n_obs": int(reg.result_.nobs),
-            "status": _classify_status(max_abs_t),
-            "target_col": target_col,
-        }
-        for col in predictor_cols:
-            row[f"coef_{col}"] = float(reg.result_.params[col])
-            row[f"t_stat_{col}"] = t_stats[col]
-            row[f"p_value_{col}"] = float(reg.result_.pvalues[col])
-        rows.append(row)
-    return pd.DataFrame(rows).sort_values("segment").reset_index(drop=True)
-
-
-def _write_chartbook(
+def write_predictivity_chartbook(
     prepared_df: pd.DataFrame,
     rolling_df: pd.DataFrame,
     predictor_cols: list[str],
@@ -421,12 +290,13 @@ def _write_chartbook(
     start: str | None,
     end: str | None,
     risky_tickers: list[str] | None,
+    title: str = "Sub-CAY Predictivity Chartbook",
 ) -> None:
     with PdfPages(pdf_path) as pdf:
         fig, ax = plt.subplots(figsize=(11, 8.5))
         ax.axis("off")
         summary_lines = [
-            "Sub-CAY Predictivity Chartbook",
+            title,
             "",
             f"Sub-category: {sub_category or 'custom dataset selection'}",
             f"Dataset: {dataset}",
@@ -456,8 +326,12 @@ def _write_chartbook(
             fig.suptitle(f"Sub-CAY Predictivity: {segment}", fontsize=14)
 
             # Actual vs predicted
-            axes[0, 0].plot(seg["quarter_idx"], seg["actual"], label="Actual", linewidth=1.6)
-            axes[0, 0].plot(seg["quarter_idx"], seg["prediction"], label="Predicted", linewidth=1.2)
+            axes[0, 0].plot(
+                seg["quarter_idx"], seg["actual"], label="Actual", linewidth=1.6
+            )
+            axes[0, 0].plot(
+                seg["quarter_idx"], seg["prediction"], label="Predicted", linewidth=1.2
+            )
             axes[0, 0].set_title(f"{target_label}: actual vs predicted")
             axes[0, 0].legend(fontsize=8)
             axes[0, 0].grid(alpha=0.3)
@@ -480,7 +354,9 @@ def _write_chartbook(
             # Rolling abs error and status counts
             axes[1, 1].plot(seg["quarter_idx"], seg["abs_error"], color="#DD8452")
             status_counts = seg["status"].value_counts().to_dict()
-            status_txt = " | ".join(f"{k}: {v}" for k, v in sorted(status_counts.items()))
+            status_txt = " | ".join(
+                f"{k}: {v}" for k, v in sorted(status_counts.items())
+            )
             axes[1, 1].set_title(f"Absolute forecast error\n{status_txt}")
             axes[1, 1].grid(alpha=0.3)
 
@@ -509,6 +385,7 @@ def build_chartbook(
     risky_ticker: str = "",
     risky_tickers: str = "",
     risky_data_source: str = "stooq",
+    cay_data_dir: str = str(PROJECT_ROOT / "cay_data"),
 ) -> None:
     """Create model outputs and a PDF chartbook for sub-cay predictivity."""
     sub_category = (cay_decomposition or sub_category) or None
@@ -528,6 +405,7 @@ def build_chartbook(
 
     prepared = prepare_predictivity_dataset(
         dataset=dataset_key,
+        cay_data_dir=cay_data_dir,
         train_periods=train_periods,
         prediction_window=prediction_window,
         target_component=target_component,
@@ -574,7 +452,9 @@ def build_chartbook(
         target_col=target_col,
     )
     if tests.empty:
-        raise RuntimeError("No segment-level predictive regression tests were produced.")
+        raise RuntimeError(
+            "No segment-level predictive regression tests were produced."
+        )
 
     rolling = _rolling_predictivity(
         prepared,
@@ -600,7 +480,7 @@ def build_chartbook(
     tests.to_csv(tests_out, index=False)
     rolling.to_csv(rolling_out, index=False)
 
-    _write_chartbook(
+    write_predictivity_chartbook(
         prepared_df=prepared,
         rolling_df=rolling,
         predictor_cols=predictor_cols,
@@ -615,238 +495,3 @@ def build_chartbook(
         end=end,
         risky_tickers=risky_ticker_list or None,
     )
-
-
-def task_chartbook():
-    """Generate a sub-cay predictivity chartbook (CSV + PDF)."""
-    targets = [
-        str(DEFAULT_OUTPUT_DIR / "subcay_predictivity_prepared.csv"),
-        str(DEFAULT_OUTPUT_DIR / "subcay_predictivity_tests.csv"),
-        str(DEFAULT_OUTPUT_DIR / "subcay_predictivity_rolling.csv"),
-        str(DEFAULT_OUTPUT_DIR / "chartbook_subcay_predictivity.pdf"),
-    ]
-    return {
-        "actions": [(build_chartbook,)],
-        "targets": targets,
-        "params": [
-            {
-                "name": "sub_category",
-                "long": "sub-category",
-                "default": "house_wealth_groups",
-                "type": str,
-                "help": (
-                    "User-facing CAY sub-category: "
-                    "asset_wealth, region, house_wealth_groups"
-                ),
-            },
-            {
-                "name": "cay_decomposition",
-                "long": "cay-decomposition",
-                "default": "",
-                "type": str,
-                "help": (
-                    "Primary decomposition option: "
-                    "asset_wealth, region, house_wealth_groups"
-                ),
-            },
-            {
-                "name": "dataset",
-                "long": "dataset",
-                "default": "wealth_groups",
-                "type": str,
-                "help": (
-                    "Dataset key override: households, households_and_nonprofits, "
-                    "wealth_groups, region_proxy"
-                ),
-            },
-            {
-                "name": "train_periods",
-                "long": "train-periods",
-                "default": 40,
-                "type": int,
-                "help": "Rolling training window length in quarters",
-            },
-            {
-                "name": "prediction_window",
-                "long": "prediction-window",
-                "default": 1,
-                "type": int,
-                "help": "Prediction horizon in quarters",
-            },
-            {
-                "name": "prediction_period",
-                "long": "prediction-period",
-                "default": 0,
-                "type": int,
-                "help": "Alias of prediction-window (quarters); overrides when > 0",
-            },
-            {
-                "name": "start",
-                "long": "start",
-                "default": "",
-                "type": str,
-                "help": "Sample start quarter (e.g., 1990Q1). Leave empty for full span.",
-            },
-            {
-                "name": "input_start",
-                "long": "input-start",
-                "default": "",
-                "type": str,
-                "help": "Input range start quarter (alias of --start).",
-            },
-            {
-                "name": "end",
-                "long": "end",
-                "default": "",
-                "type": str,
-                "help": "Sample end quarter (e.g., 2020Q4). Leave empty for full span.",
-            },
-            {
-                "name": "input_end",
-                "long": "input-end",
-                "default": "",
-                "type": str,
-                "help": "Input range end quarter (alias of --end).",
-            },
-            {
-                "name": "target_component",
-                "long": "target-component",
-                "default": "financial",
-                "type": str,
-                "help": "Target component: housing, financial, liquid",
-            },
-            {
-                "name": "risky_ticker",
-                "long": "risky-ticker",
-                "default": "",
-                "type": str,
-                "help": (
-                    "Single risky asset ticker (e.g., QQQ). "
-                    "Use --risky-tickers for multiple assets."
-                ),
-            },
-            {
-                "name": "risky_tickers",
-                "long": "risky-tickers",
-                "default": "",
-                "type": str,
-                "help": (
-                    "Comma-separated risky-asset tickers (e.g., QQQ or QQQ,SPY)."
-                ),
-            },
-            {
-                "name": "risky_data_source",
-                "long": "risky-data-source",
-                "default": "stooq",
-                "type": str,
-                "help": "pandas-datareader source for risky ticker data (default: stooq)",
-            },
-            {
-                "name": "output_dir",
-                "long": "output-dir",
-                "default": str(DEFAULT_OUTPUT_DIR),
-                "type": str,
-                "help": "Output folder for chartbook artifacts",
-            },
-            {
-                "name": "min_history_periods",
-                "long": "min-history-periods",
-                "default": 8,
-                "type": int,
-                "help": "Minimum history for expanding-mean sub-cay transform",
-            },
-        ],
-        "verbosity": 2,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Staged pipeline tasks (mirrors root dodo.py structure)
-# ---------------------------------------------------------------------------
-
-
-def task_import_region_data():
-    """Stage 1: Validate and normalise the region-proxy CSV to parquet.
-
-    Analogous to ``task_normalize_pulled_sources`` in the root dodo.
-    """
-    return {
-        "actions": [_run_import_region_data],
-        "file_dep": [str(REGION_SOURCE_CSV)],
-        "targets": [str(REGION_NORMALIZED_PARQUET), str(REGION_NORMALIZED_META)],
-        "verbosity": 2,
-    }
-
-
-def task_build_extension_panel():
-    """Stage 2: Build the predictivity panel from normalised region data.
-
-    Analogous to ``task_build_panel`` in the root dodo.
-    """
-    return {
-        "actions": [_run_build_extension_panel],
-        "file_dep": [str(REGION_NORMALIZED_PARQUET)],
-        "targets": [str(PANEL_PARQUET), str(PANEL_META)],
-        "task_dep": ["import_region_data"],
-        "verbosity": 2,
-    }
-
-
-def task_generate_extension_exhibits():
-    """Stage 3: Run analysis and produce all extension artifacts.
-
-    Analogous to ``task_generate_exhibits`` in the root dodo.
-    Produces: extension_prepared.csv, extension_rolling.csv,
-    extension_chartbook.pdf, extension_qa.json.
-    """
-    return {
-        "actions": [_run_generate_extension_exhibits],
-        "file_dep": [str(PANEL_PARQUET)],
-        "targets": [str(p) for p in EXTENSION_ARTIFACTS],
-        "task_dep": ["build_extension_panel"],
-        "verbosity": 2,
-    }
-
-
-def task_generate_combined_report():
-    """Stage 4: Write combined replication + extension LaTeX section.
-
-    Analogous to the report stage in root dodo.
-    """
-    return {
-        "actions": [_run_generate_combined_report],
-        "file_dep": [str(SETTINGS.output_dir / "extension_qa.json")],
-        "targets": [str(COMBINED_REPORT)],
-        "task_dep": ["generate_extension_exhibits"],
-        "verbosity": 2,
-    }
-
-
-DOIT_CONFIG = {
-    "default_tasks": [
-        "import_region_data",
-        "build_extension_panel",
-        "generate_extension_exhibits",
-        "generate_combined_report",
-    ]
-}
-
-
-def _run_import_region_data() -> bool:
-    import_region_data(SETTINGS)
-    return True
-
-
-def _run_build_extension_panel() -> bool:
-    build_extension_panel(SETTINGS)
-    return True
-
-
-def _run_generate_extension_exhibits() -> bool:
-    generate_extension_exhibits(SETTINGS)
-    return True
-
-
-def _run_generate_combined_report() -> bool:
-    generate_combined_report(SETTINGS)
-    return True

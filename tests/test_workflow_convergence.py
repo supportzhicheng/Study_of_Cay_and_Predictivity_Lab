@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-import tomllib
 from pathlib import Path
 
 import yaml
@@ -19,19 +18,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_pyproject_declares_stage_one_packaging_metadata():
-    pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text("utf-8"))
-
-    assert pyproject["build-system"]["requires"] == ["setuptools>=68"]
-    assert pyproject["project"] == {
-        "name": "cay-lab",
-        "version": "0.1.0",
-        "requires-python": ">=3.11",
-    }
-    assert pyproject["tool"]["setuptools"]["packages"]["find"] == {
-        "where": ["src"],
-        "include": ["cay_lab*"],
-    }
+def test_repository_uses_environment_manifest_without_packaging_metadata():
+    assert (PROJECT_ROOT / "environment.yml").exists()
+    assert not (PROJECT_ROOT / "pyproject.toml").exists()
+    assert not (PROJECT_ROOT / "cay_lab").exists()
 
 
 def test_migration_baseline_fixture_matches_documented_expectations():
@@ -114,7 +104,7 @@ def test_extension_source_manifest_pins_tracked_hashes():
     ]
 
 
-def test_shared_modules_do_not_import_cay_lab_extension():
+def test_python_modules_do_not_import_cay_lab():
     shared_paths = [
         PROJECT_ROOT / "dodo.py",
         PROJECT_ROOT / "settings.py",
@@ -128,11 +118,9 @@ def test_shared_modules_do_not_import_cay_lab_extension():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                assert "cay_lab.extension" not in {
-                    alias.name for alias in node.names
-                }, path
+                assert not any(
+                    alias.name == "cay_lab" or alias.name.startswith("cay_lab.")
+                    for alias in node.names
+                ), path
             elif isinstance(node, ast.ImportFrom):
-                if node.module == "cay_lab.extension":
-                    raise AssertionError(path)
-                if node.module == "cay_lab":
-                    assert "extension" not in {alias.name for alias in node.names}, path
+                assert not (node.module or "").startswith("cay_lab"), path

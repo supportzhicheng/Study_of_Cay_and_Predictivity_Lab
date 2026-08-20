@@ -41,6 +41,10 @@ class Settings:
     reports_dir: Path
     p10_input_dir: Path
     p10_reference_dir: Path
+    extension_data_dir: Path
+    extension_output_dir: Path
+    extension_reports_dir: Path
+    extension_input_dir: Path
     start_date: str
     end_date: str
     historical_start: str
@@ -48,10 +52,20 @@ class Settings:
     wrds_username: str | None
     wrds_password: str | None
     bea_api_key: str | None
+    extension_train_periods: int
+    extension_prediction_window: int
+    extension_target_component: str
+    extension_min_history_periods: int
 
     def create_directories(self) -> None:
         """Create generated-data directories without touching source inputs."""
-        for path in (self.data_dir, self.output_dir, self.reports_dir):
+        for path in (
+            self.data_dir,
+            self.output_dir,
+            self.reports_dir,
+            self.extension_output_dir,
+            self.extension_reports_dir,
+        ):
             path.mkdir(parents=True, exist_ok=True)
 
     def public_summary(self) -> dict[str, str | None]:
@@ -63,6 +77,10 @@ class Settings:
             "REPORTS_DIR": str(self.reports_dir),
             "P10_INPUT_DIR": str(self.p10_input_dir),
             "P10_REFERENCE_DIR": str(self.p10_reference_dir),
+            "EXTENSION_DATA_DIR": str(self.extension_data_dir),
+            "EXTENSION_OUTPUT_DIR": str(self.extension_output_dir),
+            "EXTENSION_REPORTS_DIR": str(self.extension_reports_dir),
+            "EXTENSION_INPUT_DIR": str(self.extension_input_dir),
             "START_DATE": self.start_date,
             "END_DATE": self.end_date,
             "HISTORICAL_START": self.historical_start,
@@ -89,6 +107,10 @@ def load_settings(
         "REPORTS_DIR": "reports",
         "P10_INPUT_DIR": "_data/input",
         "P10_REFERENCE_DIR": "asset",
+        "EXTENSION_DATA_DIR": "cay_data",
+        "EXTENSION_OUTPUT_DIR": "_output/extension",
+        "EXTENSION_REPORTS_DIR": "reports/paper/generated",
+        "EXTENSION_INPUT_DIR": "_data/input/extension",
         "START_DATE": "1952-10-01",
         "END_DATE": date.today().isoformat(),
         "HISTORICAL_START": "1952Q4",
@@ -96,6 +118,10 @@ def load_settings(
         "WRDS_USERNAME": None,
         "WRDS_PASSWORD": None,
         "BEA_API_KEY": None,
+        "EXTENSION_TRAIN_PERIODS": "40",
+        "EXTENSION_PREDICTION_WINDOW": "1",
+        "EXTENSION_TARGET_COMPONENT": "financial",
+        "EXTENSION_MIN_HISTORY_PERIODS": "8",
     }
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -113,6 +139,10 @@ def load_settings(
         reports_dir=_resolve_path(str(value("REPORTS_DIR")), root),
         p10_input_dir=_resolve_path(str(value("P10_INPUT_DIR")), root),
         p10_reference_dir=_resolve_path(str(value("P10_REFERENCE_DIR")), root),
+        extension_data_dir=_resolve_path(str(value("EXTENSION_DATA_DIR")), root),
+        extension_output_dir=_resolve_path(str(value("EXTENSION_OUTPUT_DIR")), root),
+        extension_reports_dir=_resolve_path(str(value("EXTENSION_REPORTS_DIR")), root),
+        extension_input_dir=_resolve_path(str(value("EXTENSION_INPUT_DIR")), root),
         start_date=str(value("START_DATE")),
         end_date=str(value("END_DATE")),
         historical_start=str(value("HISTORICAL_START")),
@@ -120,6 +150,10 @@ def load_settings(
         wrds_username=value("WRDS_USERNAME"),
         wrds_password=value("WRDS_PASSWORD"),
         bea_api_key=value("BEA_API_KEY"),
+        extension_train_periods=int(str(value("EXTENSION_TRAIN_PERIODS"))),
+        extension_prediction_window=int(str(value("EXTENSION_PREDICTION_WINDOW"))),
+        extension_target_component=str(value("EXTENSION_TARGET_COMPONENT")),
+        extension_min_history_periods=int(str(value("EXTENSION_MIN_HISTORY_PERIODS"))),
     )
 
 

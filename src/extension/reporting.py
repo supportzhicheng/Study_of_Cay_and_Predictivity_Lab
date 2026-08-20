@@ -15,10 +15,7 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.backends.backend_pdf import PdfPages
-from statsmodels.tools import add_constant
 
-from cay_lab.analysis.predictive_regression import PredictiveRegression
 from src.analysis.conventions import select_panel_conventions
 from src.analysis.estimate_cay import estimate_cay
 from src.analysis.figure_1 import plot_figure_1, prepare_figure_1
@@ -28,152 +25,11 @@ from src.analysis.table_iii import build_table_iii
 from src.analysis.table_r1 import load_paper_targets
 from src.analysis.table_vi import build_table_vi
 from src.data.build_quarterly_panel import HISTORICAL_INDEX, latest_common_quarter
+from src.extension.chartbook import write_predictivity_chartbook
+from src.extension.predictivity import rolling_predictivity
 
 if TYPE_CHECKING:
-    from cay_lab.settings import ExtensionSettings
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers shared with dodo.py
-# ---------------------------------------------------------------------------
-
-
-def _classify_status(max_abs_t: float, t_active: float = 1.96, t_weak: float = 1.28) -> str:
-    if max_abs_t > t_active:
-        return "ACTIVE"
-    if max_abs_t > t_weak:
-        return "WEAKENED"
-    return "LOST"
-
-
-def compute_rolling_predictivity(
-    df: pd.DataFrame,
-    predictor_cols: list[str],
-    target_col: str,
-    train_periods: int,
-) -> pd.DataFrame:
-    """Rolling one-period-ahead regression for every segment in *df*."""
-    rows: list[dict] = []
-    for segment, seg_df in df.groupby("segment", sort=True):
-        seg_df = seg_df.sort_index()
-        if len(seg_df) <= train_periods:
-            continue
-
-        for split in range(train_periods, len(seg_df)):
-            train = seg_df.iloc[split - train_periods : split]
-            test = seg_df.iloc[[split]]
-
-            reg = PredictiveRegression(
-                train,
-                target_col=target_col,
-                predictor_cols=predictor_cols,
-                horizon=0,
-            )
-            reg.fit()
-
-            x_test = add_constant(test[predictor_cols], has_constant="add")
-            pred = float(reg.result_.predict(x_test).iloc[0])
-            actual = float(test[target_col].iloc[0])
-            t_stats = {col: float(reg.t_stat(col)) for col in predictor_cols}
-            max_abs_t = max(abs(v) for v in t_stats.values())
-
-            row: dict = {
-                "quarter": str(test.index[0]),
-                "segment": segment,
-                "prediction": pred,
-                "actual": actual,
-                "error": actual - pred,
-                "abs_error": abs(actual - pred),
-                "r_squared": float(reg.r_squared()),
-                "n_obs": int(reg.result_.nobs),
-                "status": _classify_status(max_abs_t),
-            }
-            for col in predictor_cols:
-                row[f"t_stat_{col}"] = t_stats[col]
-                row[f"coef_{col}"] = float(reg.result_.params[col])
-            rows.append(row)
-
-    return pd.DataFrame(rows)
-
-
-# ---------------------------------------------------------------------------
-# Chartbook writer
-# ---------------------------------------------------------------------------
-
-
-def write_extension_chartbook(
-    prepared_df: pd.DataFrame,
-    rolling_df: pd.DataFrame,
-    predictor_cols: list[str],
-    pdf_path: Path,
-    *,
-    dataset: str,
-    train_periods: int,
-    prediction_window: int,
-    target_component: str,
-) -> None:
-    """Write a multi-page PDF chartbook for the extension analysis."""
-    with PdfPages(pdf_path) as pdf:
-        # Cover page
-        fig, ax = plt.subplots(figsize=(11, 8.5))
-        ax.axis("off")
-        lines = [
-            "Sub-CAY Predictivity Chartbook — Extension (Region Proxy)",
-            "",
-            f"Dataset: {dataset}",
-            f"Training window (quarters): {train_periods}",
-            f"Prediction horizon (quarters): {prediction_window}",
-            f"Target component: {target_component}",
-            f"Predictors: {', '.join(predictor_cols)}",
-            "",
-            f"Prepared observations: {len(prepared_df):,}",
-            f"Rolling forecast observations: {len(rolling_df):,}",
-            f"Segments (regions): {prepared_df['segment'].nunique()}",
-        ]
-        ax.text(0.02, 0.98, "\n".join(lines), va="top", ha="left", fontsize=12)
-        pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-        for segment in sorted(rolling_df["segment"].unique()):
-            seg = rolling_df[rolling_df["segment"] == segment].copy()
-            if seg.empty:
-                continue
-            seg["quarter_idx"] = pd.PeriodIndex(seg["quarter"], freq="Q").to_timestamp()
-
-            fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-            fig.suptitle(f"Sub-CAY Predictivity: {segment}", fontsize=14)
-
-            axes[0, 0].plot(seg["quarter_idx"], seg["actual"], label="Actual", linewidth=1.6)
-            axes[0, 0].plot(seg["quarter_idx"], seg["prediction"], label="Predicted", linewidth=1.2)
-            axes[0, 0].set_title("Future growth: actual vs predicted")
-            axes[0, 0].legend(fontsize=8)
-            axes[0, 0].grid(alpha=0.3)
-
-            axes[0, 1].plot(seg["quarter_idx"], seg["r_squared"], color="#4C72B0")
-            axes[0, 1].set_title("Rolling in-sample R²")
-            axes[0, 1].grid(alpha=0.3)
-
-            for col in predictor_cols:
-                axes[1, 0].plot(seg["quarter_idx"], seg[f"t_stat_{col}"], label=col)
-            axes[1, 0].axhline(1.96, color="green", linestyle="--", linewidth=0.8)
-            axes[1, 0].axhline(-1.96, color="green", linestyle="--", linewidth=0.8)
-            axes[1, 0].axhline(0, color="black", linewidth=0.8)
-            axes[1, 0].set_title("Rolling HAC t-stats")
-            axes[1, 0].legend(fontsize=8)
-            axes[1, 0].grid(alpha=0.3)
-
-            axes[1, 1].plot(seg["quarter_idx"], seg["abs_error"], color="#DD8452")
-            status_counts = seg["status"].value_counts().to_dict()
-            status_txt = " | ".join(f"{k}: {v}" for k, v in sorted(status_counts.items()))
-            axes[1, 1].set_title(f"Absolute forecast error\n{status_txt}")
-            axes[1, 1].grid(alpha=0.3)
-
-            for ax in axes.flat:
-                ax.tick_params(axis="x", rotation=30, labelsize=8)
-
-            fig.tight_layout(rect=(0, 0, 1, 0.95))
-            pdf.savefig(fig)
-            plt.close(fig)
+    from src.settings import Settings
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +52,7 @@ REGION_PROXY_COMPONENT_COLUMNS = (
 
 def generate_extension_report_artifacts(
     panel: pd.DataFrame,
-    settings: "ExtensionSettings",
+    settings: "Settings",
 ) -> list[Path]:
     """Generate all extension report artifacts from the prepared panel.
 
@@ -208,7 +64,7 @@ def generate_extension_report_artifacts(
 
     Returns a list of all written paths.
     """
-    out_dir = settings.output_dir
+    out_dir = settings.extension_output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     predictor_cols = [c for c in panel.columns if c.startswith("sub_cay_")]
@@ -226,36 +82,33 @@ def generate_extension_report_artifacts(
     panel_save.to_csv(prepared_csv)
 
     # 2. Rolling predictivity
-    rolling_df = compute_rolling_predictivity(
+    rolling_df = rolling_predictivity(
         panel,
         predictor_cols=predictor_cols,
         target_col="target_future_growth",
-        train_periods=settings.train_periods,
+        train_periods=settings.extension_train_periods,
     )
     rolling_csv = out_dir / "extension_rolling.csv"
     rolling_df.to_csv(rolling_csv, index=False)
 
     # 3. Chartbook PDF
     pdf_path = out_dir / "extension_chartbook.pdf"
-    if not rolling_df.empty:
-        write_extension_chartbook(
-            prepared_df=panel,
-            rolling_df=rolling_df,
-            predictor_cols=predictor_cols,
-            pdf_path=pdf_path,
-            dataset=settings.output_dir.name,
-            train_periods=settings.train_periods,
-            prediction_window=settings.prediction_window,
-            target_component=settings.target_component,
-        )
-    else:
-        # Write a stub PDF so downstream stages have a file to reference
-        fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "No rolling results (sample too short)", ha="center")
-        ax.axis("off")
-        with PdfPages(pdf_path) as pdf:
-            pdf.savefig(fig)
-        plt.close(fig)
+    write_predictivity_chartbook(
+        prepared_df=panel,
+        rolling_df=rolling_df,
+        predictor_cols=predictor_cols,
+        pdf_path=pdf_path,
+        sub_category="region",
+        dataset=settings.extension_output_dir.name,
+        train_periods=settings.extension_train_periods,
+        prediction_window=settings.extension_prediction_window,
+        target_component=settings.extension_target_component,
+        target_label="Future growth",
+        start=str(panel.index.min()),
+        end=str(panel.index.max()),
+        risky_tickers=None,
+        title="Sub-CAY Predictivity Chartbook — Extension (Region Proxy)",
+    )
 
     # 4. QA metadata
     status_counts: dict[str, int] = {}
@@ -264,11 +117,13 @@ def generate_extension_report_artifacts(
 
     qa: dict[str, object] = {
         "dataset": "region_proxy",
-        "segments": sorted(panel["segment"].unique().tolist()) if "segment" in panel.columns else [],
+        "segments": sorted(panel["segment"].unique().tolist())
+        if "segment" in panel.columns
+        else [],
         "predictors": predictor_cols,
-        "train_periods": settings.train_periods,
-        "prediction_window": settings.prediction_window,
-        "target_component": settings.target_component,
+        "train_periods": settings.extension_train_periods,
+        "prediction_window": settings.extension_prediction_window,
+        "target_component": settings.extension_target_component,
         "prepared_rows": len(panel),
         "rolling_rows": len(rolling_df),
         "status_counts": status_counts,
@@ -304,7 +159,9 @@ def _apply_selected_conventions(
     result["relative_bill_rate"] = result[relative_column]
     result["term_spread"] = result[term_column]
     result["sp_excess_return"] = result["sp_real_return"] - result[bill_column]
-    result["crsp_vw_excess_return"] = result["crsp_vw_real_return"] - result[bill_column]
+    result["crsp_vw_excess_return"] = (
+        result["crsp_vw_real_return"] - result[bill_column]
+    )
     return result
 
 
@@ -399,7 +256,7 @@ def _write_extension_replication_artifacts(
             [
                 r"\begin{figure}[htbp]",
                 r"\centering",
-                r"\includegraphics[width=\linewidth]{../../cay_lab/output/reports/figures/figure_1_extension_cay_r.pdf}",
+                r"\includegraphics[width=\linewidth]{generated/figures/figure_1_extension_cay_r.pdf}",
                 r"\caption{Standardized $cay_R$ and excess S\&P returns.}",
                 r"\label{fig:figure_1_extension_cay_r}",
                 r"\end{figure}",
@@ -422,12 +279,12 @@ def _write_extension_replication_artifacts(
 def write_extension_report_section(
     ext_reports_dir: Path,
     replication_reports_dir: Path,
-    settings: "ExtensionSettings",
+    settings: "Settings",
 ) -> Path:
     """Write extension-only LaTeX content for the main report section 08."""
     ext_reports_dir.mkdir(parents=True, exist_ok=True)
 
-    qa_path = settings.output_dir / "extension_qa.json"
+    qa_path = settings.extension_output_dir / "extension_qa.json"
     qa: dict = {}
     if qa_path.exists():
         qa = json.loads(qa_path.read_text(encoding="utf-8"))
@@ -441,8 +298,12 @@ def write_extension_report_section(
         settings.project_root / "_data" / "processed" / "core_quarterly.parquet",
         settings.project_root / "data" / "processed" / "core_quarterly.parquet",
     )
-    core_panel_path = next((p for p in core_panel_candidates if p.exists()), core_panel_candidates[0])
-    region_csv_path = settings.cay_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
+    core_panel_path = next(
+        (p for p in core_panel_candidates if p.exists()), core_panel_candidates[0]
+    )
+    region_csv_path = (
+        settings.extension_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
+    )
     targets_path = settings.project_root / "config" / "paper_targets.yml"
 
     extension_exhibit_inputs = ""
@@ -460,23 +321,24 @@ def write_extension_report_section(
         extension_exhibit_inputs = textwrap.dedent(
             r"""
             \subsection{Replication-Style Results with $cay_R$}
-            \input{../../cay_lab/output/reports/tables/table_ii_extension_cay_r.tex}
-            \input{../../cay_lab/output/reports/figures/figure_1_extension_cay_r.tex}
-            \input{../../cay_lab/output/reports/tables/table_iii_extension_cay_r.tex}
-            \input{../../cay_lab/output/reports/tables/table_vi_extension_cay_r.tex}
+            \input{generated/tables/table_ii_extension_cay_r.tex}
+            \input{generated/figures/figure_1_extension_cay_r.tex}
+            \input{generated/tables/table_iii_extension_cay_r.tex}
+            \input{generated/tables/table_vi_extension_cay_r.tex}
             """
         ).strip()
     else:
         extension_exhibit_inputs = (
-            r"\textbf{Extension exhibits unavailable:} run the core panel and "
-            r"\texttt{doit -f cay\_lab/dodo.py generate\_combined\_report}."
+            r"\textbf{Extension exhibits unavailable:} run "
+            r"\texttt{doit extension\_region\_report}."
         )
 
-    tex = textwrap.dedent(
-        rf"""
+    tex = (
+        textwrap.dedent(
+            rf"""
         % ============================================================
         %  Combined Replication + Extension Results Section
-        %  Auto-generated by cay_lab.reporting.generate
+        %  Auto-generated by src.extension.reporting
         % ============================================================
 
         \subsection{{Overview}}
@@ -500,7 +362,7 @@ def write_extension_report_section(
 
         Regions included: \textit{{{segments_str}}}.  Estimated $cay_R$ sample:
         \textit{{{sample_window}}}. Rolling extension QA summary:
-        {status_str if status_str else 'no rolling results produced'}.
+        {status_str if status_str else "no rolling results produced"}.
 
         {extension_exhibit_inputs}
 
@@ -525,8 +387,10 @@ def write_extension_report_section(
         replacing $cay$ with $cay_R$ while preserving the same downstream
         regressions, horizons, and plotting conventions.
         """
-    ).strip() + "\n"
+        ).strip()
+        + "\n"
+    )
 
-    out_path = ext_reports_dir / "combined_replication_extension.tex"
+    out_path = ext_reports_dir / "extension_report.tex"
     out_path.write_text(tex, encoding="utf-8")
     return out_path

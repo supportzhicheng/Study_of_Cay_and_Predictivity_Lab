@@ -1,1 +1,0 @@
-"""Rolling predictivity monitor."""

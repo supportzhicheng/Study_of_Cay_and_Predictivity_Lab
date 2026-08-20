@@ -4,12 +4,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cay_lab.data.loader import (
+from src.extension.loader import (
     load_cay_decomposition,
     log_transform,
-    make_synthetic_dataset,
     prepare_predictivity_dataset,
 )
+from tests.synthetic import make_synthetic_dataset
 
 
 def test_synthetic_dataset_shape():

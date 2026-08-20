@@ -60,7 +60,11 @@ class PredictiveRegression:
         y_c = combined.iloc[:, 0]
         X_c = combined.iloc[:, 1:]
         n = len(y_c)
-        lags = self.max_lags if self.max_lags is not None else int(4 * (n / 100) ** (2 / 9))
+        lags = (
+            self.max_lags
+            if self.max_lags is not None
+            else int(4 * (n / 100) ** (2 / 9))
+        )
         self.result_ = OLS(y_c, X_c).fit(cov_type="HAC", cov_kwds={"maxlags": lags})
         return self
 

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cay_lab.data.loader import make_synthetic_dataset
 from src.analysis.conventions import select_convention, select_panel_conventions
 from src.analysis.estimate_cay import construct_fixed_cay, estimate_cay
 from src.analysis.forecasting import (
@@ -13,6 +12,7 @@ from src.analysis.forecasting import (
     newey_west_lags,
     run_hac_regression,
 )
+from tests.synthetic import make_synthetic_dataset
 
 
 def test_hac_regression_accepts_nullable_numeric_dtypes():

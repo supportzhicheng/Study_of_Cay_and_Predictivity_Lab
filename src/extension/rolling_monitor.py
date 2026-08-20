@@ -25,7 +25,13 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from cay_lab.analysis.predictive_regression import PredictiveRegression
+from src.extension.predictive_regression import PredictiveRegression
+from src.extension.predictivity import (
+    STATUS_ACTIVE,
+    STATUS_LOST,
+    STATUS_WEAKENED,
+    classify_status,
+)
 
 
 class RollingPredictivityMonitor:
@@ -56,9 +62,9 @@ class RollingPredictivityMonitor:
         ``end_date``, ``t_stat``, ``r_squared``, ``n_obs``, ``status``.
     """
 
-    STATUS_ACTIVE = "ACTIVE"
-    STATUS_WEAKENED = "WEAKENED"
-    STATUS_LOST = "LOST"
+    STATUS_ACTIVE = STATUS_ACTIVE
+    STATUS_WEAKENED = STATUS_WEAKENED
+    STATUS_LOST = STATUS_LOST
 
     def __init__(
         self,
@@ -126,15 +132,7 @@ class RollingPredictivityMonitor:
 
     # ------------------------------------------------------------------
     def _classify(self, t: float) -> str:
-        if np.isnan(t):
-            return self.STATUS_LOST
-        abs_t = abs(t)
-        if abs_t > self.t_active:
-            return self.STATUS_ACTIVE
-        elif abs_t > self.t_weak:
-            return self.STATUS_WEAKENED
-        else:
-            return self.STATUS_LOST
+        return classify_status(abs(t), self.t_active, self.t_weak)
 
     # ------------------------------------------------------------------
     def status(self) -> str:
@@ -177,9 +175,16 @@ class RollingPredictivityMonitor:
 
         # --- t-statistic panel ---
         ax_t.plot(dates, res["t_stat"], color="#4C72B0", label="|t-stat|")
-        ax_t.axhline(self.t_active, color="green", linestyle="--", label=f"t_active={self.t_active}")
+        ax_t.axhline(
+            self.t_active,
+            color="green",
+            linestyle="--",
+            label=f"t_active={self.t_active}",
+        )
         ax_t.axhline(-self.t_active, color="green", linestyle="--")
-        ax_t.axhline(self.t_weak, color="orange", linestyle=":", label=f"t_weak={self.t_weak}")
+        ax_t.axhline(
+            self.t_weak, color="orange", linestyle=":", label=f"t_weak={self.t_weak}"
+        )
         ax_t.axhline(-self.t_weak, color="orange", linestyle=":")
         ax_t.axhline(0, color="black", linewidth=0.8)
         ax_t.set_ylabel("HAC t-statistic")
@@ -194,11 +199,15 @@ class RollingPredictivityMonitor:
 
         # --- R² panel ---
         if ax_r2 is not None:
-            ax_r2.fill_between(range(len(dates)), res["r_squared"], alpha=0.5, color="#DD8452")
+            ax_r2.fill_between(
+                range(len(dates)), res["r_squared"], alpha=0.5, color="#DD8452"
+            )
             ax_r2.set_ylabel("R²")
             ax_r2.set_xlabel("Window end")
             ax_r2.set_xticks(range(0, len(dates), step))
-            ax_r2.set_xticklabels(dates.iloc[::step], rotation=45, ha="right", fontsize=7)
+            ax_r2.set_xticklabels(
+                dates.iloc[::step], rotation=45, ha="right", fontsize=7
+            )
 
         # Colour background by status
         colour_map = {

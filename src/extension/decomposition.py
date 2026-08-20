@@ -29,8 +29,8 @@ from typing import Optional
 
 import pandas as pd
 
-from cay_lab.analysis.cay_builder import CayBuilder
-from cay_lab.analysis.predictive_regression import PredictiveRegression
+from src.analysis.cay_builder import CayBuilder
+from src.extension.predictive_regression import PredictiveRegression
 
 
 class CayDecomposer:
@@ -130,7 +130,11 @@ class CayDecomposer:
             }
         )
 
-        self.results_ = pd.DataFrame(rows).sort_values("r_squared", ascending=False).reset_index(drop=True)
+        self.results_ = (
+            pd.DataFrame(rows)
+            .sort_values("r_squared", ascending=False)
+            .reset_index(drop=True)
+        )
 
         # Step 3: Shapley-value decomposition
         self.shapley_ = self._shapley(r2_map)
@@ -152,7 +156,9 @@ class CayDecomposer:
                     v_s = r2_map.get(s, 0.0)
                     v_s_plus = r2_map.get(s_plus, 0.0)
                     weight = (
-                        math.factorial(size) * math.factorial(n - size - 1) / math.factorial(n)
+                        math.factorial(size)
+                        * math.factorial(n - size - 1)
+                        / math.factorial(n)
                     )
                     shapley[player] += weight * (v_s_plus - v_s)
 

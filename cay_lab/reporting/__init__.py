@@ -1,1 +1,0 @@
-"""Extension reporting package."""

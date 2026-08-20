@@ -5,66 +5,57 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-from shutil import copy2
 
-from cay_lab.dodo import build_chartbook
-from cay_lab.pipeline import (
+from src.bootstrap_real_data import bootstrap_real_data
+from src.data.build_sources import RAW_FILES, normalize_pulled_sources
+from src.data.import_local import import_local_source
+from src.data.pull_author_cay import ensure_author_data
+from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
+from src.extension.chartbook import build_chartbook
+from src.extension.pipeline import (
     PANEL_STEM as EXTENSION_PANEL_STEM,
 )
-from cay_lab.pipeline import (
+from src.extension.pipeline import (
     REGION_NORMALIZED_STEM,
     build_extension_panel,
     generate_combined_report,
     generate_extension_exhibits,
     import_region_data,
 )
-from cay_lab.settings import load_extension_settings
-from src.bootstrap_real_data import bootstrap_real_data
-from src.data.build_sources import normalize_pulled_sources
-from src.data.import_local import import_local_source
-from src.data.pull_author_cay import ensure_author_data
-from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
 from src.pipeline import build_panel, generate_exhibits
 from src.reporting.latex import compile_latex_report
 from src.settings import load_settings
 
 SETTINGS = load_settings([])
-EXTENSION_SETTINGS = load_extension_settings()
 PANEL_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.parquet"
 PANEL_METADATA_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.metadata.json"
 MANIFEST_PATH = SETTINGS.reports_dir / "build" / "artifact_manifest.json"
 BOOTSTRAP_MARKER = SETTINGS.output_dir / "bootstrap_real_data.complete"
 TARGETS_PATH = SETTINGS.project_root / "config" / "paper_targets.yml"
 EXTENSION_REGION_SOURCE_CSV = (
-    EXTENSION_SETTINGS.cay_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
+    SETTINGS.extension_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
 )
 EXTENSION_REGION_NORMALIZED_PARQUET = (
-    EXTENSION_SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    SETTINGS.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
 )
 EXTENSION_REGION_NORMALIZED_META = (
-    EXTENSION_SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+    SETTINGS.extension_output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
 )
 EXTENSION_PANEL_PARQUET = (
-    EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.parquet"
+    SETTINGS.extension_output_dir / f"{EXTENSION_PANEL_STEM}.parquet"
 )
 EXTENSION_PANEL_META = (
-    EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.metadata.json"
+    SETTINGS.extension_output_dir / f"{EXTENSION_PANEL_STEM}.metadata.json"
 )
-EXTENSION_REPORT_TEX = (
-    EXTENSION_SETTINGS.reports_dir / "combined_replication_extension.tex"
-)
+EXTENSION_REPORT_TEX = SETTINGS.extension_reports_dir / "extension_report.tex"
 EXTENSION_EXHIBIT_ARTIFACTS = (
-    EXTENSION_SETTINGS.output_dir / "extension_prepared.csv",
-    EXTENSION_SETTINGS.output_dir / "extension_rolling.csv",
-    EXTENSION_SETTINGS.output_dir / "extension_chartbook.pdf",
-    EXTENSION_SETTINGS.output_dir / "extension_qa.json",
+    SETTINGS.extension_output_dir / "extension_prepared.csv",
+    SETTINGS.extension_output_dir / "extension_rolling.csv",
+    SETTINGS.extension_output_dir / "extension_chartbook.pdf",
+    SETTINGS.extension_output_dir / "extension_qa.json",
 )
 SECTION9_CHARTBOOK_OUTPUT_DIR = (
-    EXTENSION_SETTINGS.project_root
-    / "cay_lab"
-    / "output"
-    / "examples"
-    / "wealth_groups_2023Q1_2026Q1_h2_QQQ_train8"
+    SETTINGS.project_root / "_output" / "extension" / "section9"
 )
 SECTION9_CHARTBOOK_TARGETS = (
     SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_prepared.csv",
@@ -72,6 +63,7 @@ SECTION9_CHARTBOOK_TARGETS = (
     SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_rolling.csv",
     SECTION9_CHARTBOOK_OUTPUT_DIR / "chartbook_subcay_predictivity.pdf",
 )
+SECTION9_QQQ_CACHE = SETTINGS.extension_data_dir / "raw" / "market_cache" / "QQQ.csv"
 
 TABLE_IDS = (
     "table_ii_replication",
@@ -130,7 +122,17 @@ def _run_tests_action() -> None:
 
 def task_config():
     """Create ignored data and output directories."""
-    return {"actions": [SETTINGS.create_directories]}
+    directories = (
+        SETTINGS.data_dir,
+        SETTINGS.output_dir,
+        SETTINGS.reports_dir,
+        SETTINGS.extension_output_dir,
+        SETTINGS.extension_reports_dir,
+    )
+    return {
+        "actions": [SETTINGS.create_directories],
+        "uptodate": [lambda: all(path.is_dir() for path in directories)],
+    }
 
 
 def task_pull_author_data():
@@ -139,32 +141,52 @@ def task_pull_author_data():
     def pull_author_data():
         ensure_author_data(SETTINGS.data_dir / "normalized", vintage=SETTINGS.end_date)
 
+    targets = [
+        str(SETTINGS.data_dir / "normalized" / f"{filename}.{suffix}")
+        for filename in ("paper_macro_quarterly", "posted_cay_quarterly")
+        for suffix in ("parquet", "metadata.json")
+    ]
     return {
         "actions": [pull_author_data],
         "task_dep": ["config"],
-        "targets": [
-            str(SETTINGS.data_dir / "normalized" / f"{filename}.{suffix}")
-            for filename in ("paper_macro_quarterly", "posted_cay_quarterly")
-            for suffix in ("parquet", "metadata.json")
-        ],
+        "targets": targets,
+        "uptodate": [lambda: all(Path(target).exists() for target in targets)],
     }
 
 
 def task_import_sources():
     """Validate normalized local source substitutes."""
 
-    def import_available_sources():
-        for source_id, spec in SOURCE_REGISTRY.items():
-            candidates = list(SETTINGS.p10_input_dir.glob(f"{spec.filename_stem}.*"))
-            if candidates:
-                import_local_source(
-                    source_id,
-                    SETTINGS.p10_input_dir,
-                    SETTINGS.data_dir / "normalized",
-                    vintage=SETTINGS.end_date,
-                )
+    available = {
+        source_id: candidates
+        for source_id, spec in SOURCE_REGISTRY.items()
+        if (candidates := list(SETTINGS.p10_input_dir.glob(f"{spec.filename_stem}.*")))
+    }
 
-    return {"actions": [import_available_sources], "task_dep": ["config"]}
+    def import_available_sources():
+        for source_id in available:
+            import_local_source(
+                source_id,
+                SETTINGS.p10_input_dir,
+                SETTINGS.data_dir / "normalized",
+                vintage=SETTINGS.end_date,
+            )
+
+    return {
+        "actions": [import_available_sources],
+        "file_dep": [str(path) for paths in available.values() for path in paths],
+        "targets": [
+            str(
+                SETTINGS.data_dir
+                / "normalized"
+                / f"{SOURCE_REGISTRY[source_id].filename_stem}.{suffix}"
+            )
+            for source_id in available
+            for suffix in ("parquet", "metadata.json")
+        ],
+        "task_dep": ["config"],
+        "uptodate": [not available],
+    }
 
 
 def task_normalize_pulled_sources():
@@ -179,6 +201,24 @@ def task_normalize_pulled_sources():
 
     return {
         "actions": [normalize_sources],
+        "file_dep": [
+            str(SETTINGS.data_dir / "raw" / relative) for relative in RAW_FILES.values()
+        ],
+        "targets": [
+            str(
+                SETTINGS.data_dir
+                / "normalized"
+                / f"{SOURCE_REGISTRY[source_id].filename_stem}.{suffix}"
+            )
+            for source_id in (
+                "core_macro",
+                "sp_market",
+                "crsp_market",
+                "rates",
+                "recessions",
+            )
+            for suffix in ("parquet", "metadata.json")
+        ],
         "task_dep": ["config"],
     }
 
@@ -200,12 +240,16 @@ def task_build_panel():
             for source_id in required_panel_sources()
         ],
         "targets": [str(PANEL_PATH), str(PANEL_METADATA_PATH)],
-        "task_dep": ["pull_author_data", "import_sources"],
+        "task_dep": [
+            "pull_author_data",
+            "import_sources",
+            "normalize_pulled_sources",
+        ],
     }
 
 
 def task_generate_exhibits():
-    """Generate all 32 pre-PDF report artifacts."""
+    """Generate all core pre-PDF report artifacts."""
 
     def generate():
         generate_exhibits(SETTINGS)
@@ -226,21 +270,6 @@ def task_generate_exhibits():
 
 
 def _run_notebook() -> None:
-    kernel_name = f"cay-runtime-py{sys.version_info.major}{sys.version_info.minor}"
-    subprocess.run(
-        [
-            str(Path(sys.executable)),
-            "-m",
-            "ipykernel",
-            "install",
-            "--user",
-            "--name",
-            kernel_name,
-            "--display-name",
-            kernel_name,
-        ],
-        check=True,
-    )
     output_dir = SETTINGS.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     source = SETTINGS.project_root / "notebooks" / "01_cay_replication_tour.ipynb"
@@ -251,7 +280,6 @@ def _run_notebook() -> None:
             "jupyter",
             "nbconvert",
             "--execute",
-            f"--ExecutePreprocessor.kernel_name={kernel_name}",
             "--to=notebook",
             f"--output-dir={output_dir}",
             str(source),
@@ -293,24 +321,25 @@ def task_compile_report():
     """Compile LaTeX and persist the build log."""
 
     def compile_report():
-        main_pdf = compile_latex_report(SETTINGS.reports_dir)
-        test_pdf = SETTINGS.reports_dir / "build" / "test_main.pdf"
-        copy2(main_pdf, test_pdf)
+        compile_latex_report(SETTINGS.reports_dir)
 
     return {
         "actions": [compile_report],
         "file_dep": [
             str(path) for path in (*GENERATED_ARTIFACTS, MANIFEST_PATH, *REPORT_SOURCES)
+        ]
+        + [
+            str(EXTENSION_REPORT_TEX),
+            str(SECTION9_CHARTBOOK_TARGETS[-1]),
         ],
         "targets": [
             str(SETTINGS.reports_dir / "build" / "main.pdf"),
-            str(SETTINGS.reports_dir / "build" / "test_main.pdf"),
             str(SETTINGS.reports_dir / "build" / "latex_build.log"),
         ],
         "task_dep": [
             "generate_exhibits",
-            "extension_generate_combined_report",
-            "cay_lab_section9_chartbook",
+            "extension_region_report",
+            "extension_section9_chartbook",
         ],
     }
 
@@ -351,20 +380,22 @@ def _build_extension_input_data() -> None:
 
 def task_extension_build_input_data():
     """Build local extension decomposition CSV inputs under cay_data/."""
+    targets = [
+        str(SETTINGS.extension_data_dir / "cay_components_households_q.csv"),
+        str(SETTINGS.extension_data_dir / "cay_components_hnpo_q.csv"),
+        str(SETTINGS.extension_data_dir / "cay_components_wealth_groups_q.csv"),
+        str(EXTENSION_REGION_SOURCE_CSV),
+    ]
     return {
         "actions": [_build_extension_input_data],
         "task_dep": ["config"],
-        "targets": [
-            str(EXTENSION_SETTINGS.cay_data_dir / "cay_components_households_q.csv"),
-            str(EXTENSION_SETTINGS.cay_data_dir / "cay_components_hnpo_q.csv"),
-            str(EXTENSION_SETTINGS.cay_data_dir / "cay_components_wealth_groups_q.csv"),
-            str(EXTENSION_REGION_SOURCE_CSV),
-        ],
+        "targets": targets,
+        "uptodate": [lambda: all(Path(target).exists() for target in targets)],
     }
 
 
 def _run_extension_import_region_data() -> None:
-    import_region_data(EXTENSION_SETTINGS)
+    import_region_data(SETTINGS)
 
 
 def task_extension_import_region_data():
@@ -381,7 +412,7 @@ def task_extension_import_region_data():
 
 
 def _run_extension_build_panel() -> None:
-    build_extension_panel(EXTENSION_SETTINGS)
+    build_extension_panel(SETTINGS)
 
 
 def task_extension_build_panel():
@@ -395,7 +426,7 @@ def task_extension_build_panel():
 
 
 def _run_extension_generate_exhibits() -> None:
-    generate_extension_exhibits(EXTENSION_SETTINGS)
+    generate_extension_exhibits(SETTINGS)
 
 
 def task_extension_generate_exhibits():
@@ -409,20 +440,20 @@ def task_extension_generate_exhibits():
 
 
 def _run_extension_generate_combined_report() -> None:
-    generate_combined_report(EXTENSION_SETTINGS)
+    generate_combined_report(SETTINGS)
 
 
-def task_extension_generate_combined_report():
+def task_extension_region_report():
     """Stage 4: generate the extension LaTeX section used by Section 8."""
     return {
         "actions": [_run_extension_generate_combined_report],
-        "file_dep": [str(EXTENSION_SETTINGS.output_dir / "extension_qa.json")],
+        "file_dep": [str(SETTINGS.extension_output_dir / "extension_qa.json")],
         "targets": [str(EXTENSION_REPORT_TEX)],
         "task_dep": ["extension_generate_exhibits"],
     }
 
 
-def _run_cay_lab_section9_chartbook() -> None:
+def _run_extension_section9_chartbook() -> None:
     build_chartbook(
         cay_decomposition="house_wealth_groups",
         input_start="2023Q1",
@@ -432,13 +463,18 @@ def _run_cay_lab_section9_chartbook() -> None:
         min_history_periods=2,
         risky_ticker="QQQ",
         output_dir=str(SECTION9_CHARTBOOK_OUTPUT_DIR),
+        cay_data_dir=str(SETTINGS.extension_data_dir),
     )
 
 
-def task_cay_lab_section9_chartbook():
+def task_extension_section9_chartbook():
     """Generate Section 9 worked-example CAY Lab chartbook artifacts."""
     return {
-        "actions": [_run_cay_lab_section9_chartbook],
+        "actions": [_run_extension_section9_chartbook],
+        "file_dep": [
+            str(SETTINGS.extension_data_dir / "cay_components_wealth_groups_q.csv"),
+            str(SECTION9_QQQ_CACHE),
+        ],
         "targets": [str(path) for path in SECTION9_CHARTBOOK_TARGETS],
         "task_dep": ["extension_build_input_data"],
     }

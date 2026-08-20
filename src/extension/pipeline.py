@@ -6,11 +6,7 @@ Mirrors the stage structure of ``src/pipeline.py``:
   3. exhibits – run analysis and produce chartbook + table artifacts
   4. report   – write combined replication + extension report section
 
-Run individual stages or all at once:
-    python -m cay_lab.pipeline import  [--output-dir PATH]
-    python -m cay_lab.pipeline panel   [--output-dir PATH]
-    python -m cay_lab.pipeline exhibits
-    python -m cay_lab.pipeline all
+Run individual stages or all at once with ``python -m src.extension.pipeline``.
 """
 
 from __future__ import annotations
@@ -23,8 +19,8 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
-from cay_lab.data.loader import COMPONENTS, load_cay_decomposition
-from cay_lab.settings import ExtensionSettings, load_extension_settings
+from src.extension.loader import COMPONENTS, load_cay_decomposition
+from src.settings import Settings, load_settings
 
 # ---------------------------------------------------------------------------
 # Stage 1 – Import / normalise
@@ -34,7 +30,7 @@ REGION_DATASET = "region_proxy"
 REGION_NORMALIZED_STEM = "region_proxy_normalised"
 
 
-def import_region_data(settings: ExtensionSettings) -> Path:
+def import_region_data(settings: Settings) -> Path:
     """Validate and persist the region-proxy CSV as a normalised parquet.
 
     Loads ``cay_components_region_ca_il_tx_q_proxy.csv`` from ``cay_data/``,
@@ -47,7 +43,7 @@ def import_region_data(settings: ExtensionSettings) -> Path:
 
     raw_df = load_cay_decomposition(
         dataset=REGION_DATASET,
-        cay_data_dir=settings.cay_data_dir,
+        cay_data_dir=settings.extension_data_dir,
         dropna_components=False,
     )
 
@@ -59,11 +55,9 @@ def import_region_data(settings: ExtensionSettings) -> Path:
     }
     missing = required_cols - set(raw_df.columns)
     if missing:
-        raise ValueError(
-            f"Region proxy CSV is missing required columns: {missing}"
-        )
+        raise ValueError(f"Region proxy CSV is missing required columns: {missing}")
 
-    out_parquet = settings.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    out_parquet = settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
     raw_df.to_parquet(out_parquet)
 
     metadata = {
@@ -73,7 +67,9 @@ def import_region_data(settings: ExtensionSettings) -> Path:
         "regions": sorted(raw_df["region"].dropna().unique().tolist()),
         "columns": list(raw_df.columns),
     }
-    meta_path = settings.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+    meta_path = (
+        settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+    )
     meta_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     return out_parquet
 
@@ -124,9 +120,7 @@ def _apply_predictivity_transforms(
             ] + candidates
         found = next((col for col in candidates if col in panel.columns), None)
         if found is None:
-            raise ValueError(
-                f"Could not find component column for '{comp}'."
-            )
+            raise ValueError(f"Could not find component column for '{comp}'.")
         component_col_map[comp] = found
 
     keep_cols = ["segment"] + list(component_col_map.values())
@@ -158,13 +152,15 @@ def _apply_predictivity_transforms(
     return final_df
 
 
-def build_extension_panel(settings: ExtensionSettings) -> Path:
+def build_extension_panel(settings: Settings) -> Path:
     """Prepare the predictivity panel from the normalised parquet (Stage 1 output).
 
     Loads the parquet written by :func:`import_region_data`, applies sub-cay
     log-level deviation transforms, and saves the model-ready panel.
     """
-    normalised_path = settings.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    normalised_path = (
+        settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    )
     if not normalised_path.exists():
         raise FileNotFoundError(
             f"Normalised region data not found: {normalised_path}. "
@@ -177,26 +173,26 @@ def build_extension_panel(settings: ExtensionSettings) -> Path:
 
     panel = _apply_predictivity_transforms(
         raw_df,
-        target_component=settings.target_component,
-        prediction_window=settings.prediction_window,
-        min_history_periods=settings.min_history_periods,
-        train_periods=settings.train_periods,
+        target_component=settings.extension_target_component,
+        prediction_window=settings.extension_prediction_window,
+        min_history_periods=settings.extension_min_history_periods,
+        train_periods=settings.extension_train_periods,
     )
 
-    out_path = settings.output_dir / f"{PANEL_STEM}.parquet"
+    out_path = settings.extension_output_dir / f"{PANEL_STEM}.parquet"
     panel_to_save = panel.copy()
     panel_to_save.index = panel_to_save.index.astype(str)
     panel_to_save.to_parquet(out_path)
 
     meta = {
         "dataset": REGION_DATASET,
-        "train_periods": settings.train_periods,
-        "prediction_window": settings.prediction_window,
-        "target_component": settings.target_component,
+        "train_periods": settings.extension_train_periods,
+        "prediction_window": settings.extension_prediction_window,
+        "target_component": settings.extension_target_component,
         "rows": len(panel),
         "segments": sorted(panel["segment"].unique().tolist()),
     }
-    (settings.output_dir / f"{PANEL_STEM}.metadata.json").write_text(
+    (settings.extension_output_dir / f"{PANEL_STEM}.metadata.json").write_text(
         json.dumps(meta, indent=2) + "\n", encoding="utf-8"
     )
     return out_path
@@ -207,7 +203,7 @@ def build_extension_panel(settings: ExtensionSettings) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def generate_extension_exhibits(settings: ExtensionSettings) -> list[Path]:
+def generate_extension_exhibits(settings: Settings) -> list[Path]:
     """Run predictive-regression analysis and produce all extension artifacts.
 
     Produces the same kinds of outputs as ``src/pipeline.generate_exhibits``:
@@ -218,13 +214,12 @@ def generate_extension_exhibits(settings: ExtensionSettings) -> list[Path]:
 
     Returns paths of all generated files.
     """
-    from cay_lab.reporting.generate import generate_extension_report_artifacts
+    from src.extension.reporting import generate_extension_report_artifacts
 
-    panel_path = settings.output_dir / f"{PANEL_STEM}.parquet"
+    panel_path = settings.extension_output_dir / f"{PANEL_STEM}.parquet"
     if not panel_path.exists():
         raise FileNotFoundError(
-            f"Extension panel not found: {panel_path}. "
-            "Run the 'panel' stage first."
+            f"Extension panel not found: {panel_path}. Run the 'panel' stage first."
         )
 
     raw_panel = pd.read_parquet(panel_path)
@@ -242,7 +237,7 @@ def generate_extension_exhibits(settings: ExtensionSettings) -> list[Path]:
 
 
 def generate_combined_report(
-    settings: ExtensionSettings,
+    settings: Settings,
     replication_reports_dir: Path | None = None,
 ) -> Path:
     """Write the combined replication + extension LaTeX section.
@@ -251,9 +246,9 @@ def generate_combined_report(
     available) and appends extension results.  The replication content is
     never modified.
     """
-    from cay_lab.reporting.generate import write_extension_report_section
+    from src.extension.reporting import write_extension_report_section
 
-    ext_reports_dir = settings.reports_dir
+    ext_reports_dir = settings.extension_reports_dir
     ext_reports_dir.mkdir(parents=True, exist_ok=True)
 
     repl_dir = replication_reports_dir or (settings.project_root / "reports")
@@ -271,7 +266,7 @@ def generate_combined_report(
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Run the cay_lab extension pipeline.",
+        description="Run the extension pipeline.",
     )
     parser.add_argument(
         "command",
@@ -283,12 +278,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--target-component", default="financial")
     args = parser.parse_args(argv)
 
-    settings = load_extension_settings(
-        output_dir=Path(args.output_dir) if args.output_dir else None,
-        train_periods=args.train_periods,
-        prediction_window=args.prediction_window,
-        target_component=args.target_component,
-    )
+    setting_args = [
+        "--EXTENSION_TRAIN_PERIODS",
+        str(args.train_periods),
+        "--EXTENSION_PREDICTION_WINDOW",
+        str(args.prediction_window),
+        "--EXTENSION_TARGET_COMPONENT",
+        args.target_component,
+    ]
+    if args.output_dir:
+        setting_args.extend(["--EXTENSION_OUTPUT_DIR", args.output_dir])
+    settings = load_settings(setting_args)
 
     if args.command in {"import", "all"}:
         p = import_region_data(settings)

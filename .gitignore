@@ -7,9 +7,7 @@ cay_data/raw/market_cache/
 reports/build/
 reports/tables/
 reports/figures/
-reports/paper/generated/report_metadata.tex
-reports/paper/generated/replication_status.tex
-reports/paper/generated/generated_captions.tex
+reports/paper/generated/
 __pycache__/
 *.py[cod]
 .pytest_cache/

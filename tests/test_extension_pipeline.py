@@ -16,7 +16,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from cay_lab.pipeline import (
+from src.extension.pipeline import (
     PANEL_STEM,
     REGION_NORMALIZED_STEM,
     build_extension_panel,
@@ -24,7 +24,7 @@ from cay_lab.pipeline import (
     generate_extension_exhibits,
     import_region_data,
 )
-from cay_lab.settings import load_extension_settings
+from src.settings import load_settings
 
 # ---------------------------------------------------------------------------
 # Fixture: temporary settings pointing to real cay_data source files
@@ -37,13 +37,22 @@ REGION_CSV = PROJECT_ROOT / "cay_data" / "cay_components_region_ca_il_tx_q_proxy
 @pytest.fixture
 def tmp_settings(tmp_path):
     """Settings with output/reports dirs redirected to a temp directory."""
-    return load_extension_settings(
-        output_dir=tmp_path / "output",
-        reports_dir=tmp_path / "reports",
-        train_periods=10,          # small for fast tests
-        prediction_window=1,
-        target_component="financial",
-        min_history_periods=4,
+    return load_settings(
+        argv=[
+            "--EXTENSION_OUTPUT_DIR",
+            str(tmp_path / "output"),
+            "--EXTENSION_REPORTS_DIR",
+            str(tmp_path / "reports"),
+            "--EXTENSION_TRAIN_PERIODS",
+            "10",
+            "--EXTENSION_PREDICTION_WINDOW",
+            "1",
+            "--EXTENSION_TARGET_COMPONENT",
+            "financial",
+            "--EXTENSION_MIN_HISTORY_PERIODS",
+            "4",
+        ],
+        project_root=PROJECT_ROOT,
     )
 
 
@@ -68,7 +77,9 @@ def test_import_region_data_creates_parquet(tmp_settings):
 )
 def test_import_region_data_metadata_json(tmp_settings):
     import_region_data(tmp_settings)
-    meta_path = tmp_settings.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+    meta_path = (
+        tmp_settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+    )
     assert meta_path.exists()
     meta = json.loads(meta_path.read_text())
     assert "regions" in meta
@@ -81,12 +92,17 @@ def test_import_region_data_metadata_json(tmp_settings):
 )
 def test_import_region_data_required_columns(tmp_settings):
     import_region_data(tmp_settings)
-    parquet = tmp_settings.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+    parquet = tmp_settings.extension_output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
     df = pd.read_parquet(parquet)
-    for col in ("region", "housing_proxy_scaled_million_usd",
-                "financial_proxy_scaled_million_usd",
-                "liquid_proxy_scaled_million_usd"):
-        assert col in df.columns, f"Required column '{col}' missing from normalised data."
+    for col in (
+        "region",
+        "housing_proxy_scaled_million_usd",
+        "financial_proxy_scaled_million_usd",
+        "liquid_proxy_scaled_million_usd",
+    ):
+        assert col in df.columns, (
+            f"Required column '{col}' missing from normalised data."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +128,7 @@ def test_build_extension_panel_creates_parquet(tmp_settings):
 def test_build_extension_panel_has_subcay_columns(tmp_settings):
     import_region_data(tmp_settings)
     build_extension_panel(tmp_settings)
-    parquet = tmp_settings.output_dir / f"{PANEL_STEM}.parquet"
+    parquet = tmp_settings.extension_output_dir / f"{PANEL_STEM}.parquet"
     df = pd.read_parquet(parquet)
     sub_cay_cols = [c for c in df.columns if c.startswith("sub_cay_")]
     assert len(sub_cay_cols) >= 1, "Extension panel has no sub_cay_* columns."
@@ -125,7 +141,7 @@ def test_build_extension_panel_has_subcay_columns(tmp_settings):
 def test_build_extension_panel_has_segment_column(tmp_settings):
     import_region_data(tmp_settings)
     build_extension_panel(tmp_settings)
-    parquet = tmp_settings.output_dir / f"{PANEL_STEM}.parquet"
+    parquet = tmp_settings.extension_output_dir / f"{PANEL_STEM}.parquet"
     df = pd.read_parquet(parquet)
     assert "segment" in df.columns
 
@@ -166,7 +182,9 @@ def test_generate_extension_exhibits_qa_json_has_segments(tmp_settings):
     import_region_data(tmp_settings)
     build_extension_panel(tmp_settings)
     generate_extension_exhibits(tmp_settings)
-    qa = json.loads((tmp_settings.output_dir / "extension_qa.json").read_text())
+    qa = json.loads(
+        (tmp_settings.extension_output_dir / "extension_qa.json").read_text()
+    )
     assert "segments" in qa
     assert len(qa["segments"]) > 0
 
@@ -179,7 +197,7 @@ def test_generate_extension_exhibits_chartbook_is_pdf(tmp_settings):
     import_region_data(tmp_settings)
     build_extension_panel(tmp_settings)
     generate_extension_exhibits(tmp_settings)
-    pdf = tmp_settings.output_dir / "extension_chartbook.pdf"
+    pdf = tmp_settings.extension_output_dir / "extension_chartbook.pdf"
     assert pdf.exists()
     # PDF magic bytes
     assert pdf.read_bytes()[:4] == b"%PDF"
@@ -230,8 +248,8 @@ def test_replication_pipeline_imports_cleanly():
 
 
 def test_extension_settings_defaults():
-    s = load_extension_settings()
-    assert s.train_periods == 40
-    assert s.prediction_window == 1
-    assert s.target_component == "financial"
-    assert s.include_extension is True
+    settings = load_settings(argv=[])
+    assert settings.extension_train_periods == 40
+    assert settings.extension_prediction_window == 1
+    assert settings.extension_target_component == "financial"
+    assert settings.extension_min_history_periods == 8

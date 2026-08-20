@@ -103,14 +103,19 @@ def test_doit_targets_have_one_owner_and_required_edges():
             owners[target] = task_name
 
     assert len(tasks["build_panel"]["targets"]) == 2
+    assert "normalize_pulled_sources" in tasks["build_panel"]["task_dep"]
     assert len(tasks["generate_exhibits"]["targets"]) == 33
     assert tasks["generate_exhibits"]["task_dep"] == ["build_panel"]
     assert tasks["run_notebook"]["task_dep"] == ["generate_exhibits"]
     assert tasks["compile_report"]["task_dep"] == [
         "generate_exhibits",
-        "extension_generate_combined_report",
-        "cay_lab_section9_chartbook",
+        "extension_region_report",
+        "extension_section9_chartbook",
     ]
+    assert not any(
+        target.endswith("test_main.pdf")
+        for target in tasks["compile_report"]["targets"]
+    )
 
     exhibit_dependencies = set(tasks["generate_exhibits"]["file_dep"])
     for path in (
