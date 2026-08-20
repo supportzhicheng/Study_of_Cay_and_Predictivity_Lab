@@ -58,7 +58,6 @@ def test_extension_source_manifest_pins_tracked_hashes():
     assert manifest["tracked_raw_root"] == "cay_data/raw"
     assert manifest["sources"]["fdic_state_deposits"]["enabled"] is False
 
-    raw_root = PROJECT_ROOT / "cay_data" / "raw"
     z1_s14 = manifest["sources"]["z1_s14_b"]
     z1_s1m = manifest["sources"]["z1_s1m_b"]
     dfa = manifest["sources"]["dfa_zip"]
@@ -76,6 +75,7 @@ def test_extension_source_manifest_pins_tracked_hashes():
     for spec in supplemental:
         assert _sha256(PROJECT_ROOT / spec["tracked_file"]) == spec["sha256"]
 
+    raw_root = PROJECT_ROOT / "cay_data" / "raw"
     assert sorted(path.name for path in raw_root.glob("fred_*.csv")) == [
         "fred_CAPCPI.csv",
         "fred_CAPOP.csv",
@@ -96,6 +96,9 @@ def test_shared_modules_do_not_import_cay_lab_extension():
         PROJECT_ROOT / "settings.py",
         *sorted((PROJECT_ROOT / "src").rglob("*.py")),
     ]
+
+    for path in shared_paths:
+        assert path.exists(), path
 
     for path in shared_paths:
         assert "cay_lab.extension" not in path.read_text(encoding="utf-8"), path
