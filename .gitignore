@@ -3,6 +3,7 @@ asset/
 _data/
 _output/
 cay_lab/output/
+cay_data/raw/market_cache/
 reports/build/
 reports/tables/
 reports/figures/

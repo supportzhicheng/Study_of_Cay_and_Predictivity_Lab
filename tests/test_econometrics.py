@@ -24,6 +24,8 @@ def test_hac_regression_accepts_nullable_numeric_dtypes():
 
     assert result.observations == 12
     assert result.coefficients["signal"] == pytest.approx(1.0)
+
+
 def test_estimate_cay_uses_interior_fit_and_full_level_construction():
     frame = make_synthetic_dataset(n_periods=80, seed=5)
 
@@ -71,9 +73,10 @@ def test_forward_change_aligns_future_level_change():
     assert pd.isna(result.loc["2000Q3"])
 
 
-def test_newey_west_bandwidth_covers_overlap():
-    assert newey_west_lags(200, 24) >= 23
-    assert newey_west_lags(200, 1) >= 0
+def test_newey_west_bandwidth_uses_horizon_rule():
+    assert newey_west_lags(200, 1) == 1
+    assert newey_west_lags(200, 2) == 1
+    assert newey_west_lags(200, 24) == 23
 
 
 def test_hac_regression_recovers_slope_and_metadata():
@@ -148,7 +151,7 @@ def test_candidate_scoring_uses_scaled_error_and_declared_tie_break():
     assert tied.selected == "second"
 
 
-def test_panel_convention_selection_recomputes_canonical_excess_returns():
+def test_panel_conventions_use_source_defined_primary_columns():
     rng = np.random.default_rng(90)
     index = pd.period_range("1952Q4", periods=100, freq="Q")
     panel = pd.DataFrame(
@@ -180,14 +183,25 @@ def test_panel_convention_selection_recomputes_canonical_excess_returns():
     }
 
     result = select_panel_conventions(panel, targets)
-    bill_column = {
-        "bill_30d": "bill_30d_return",
-        "bill_3m": "bill_3m_return",
-    }[result.risk_free.selected]
 
+    assert result.risk_free.selected == "bill_30d"
+    assert result.term_spread.selected == "term_10y_3m"
+    assert set(result.risk_free.candidate_metrics) == {"bill_30d", "bill_3m"}
+    assert set(result.term_spread.candidate_metrics) == {
+        "term_10y_3m",
+        "term_10y_1y",
+    }
     assert "relative_bill_rate" in result.panel
     assert "term_spread" in result.panel
     np.testing.assert_allclose(
         result.panel["sp_excess_return"],
-        result.panel["sp_real_return"] - result.panel[bill_column],
+        result.panel["sp_real_return"] - result.panel["bill_30d_return"],
+    )
+    np.testing.assert_allclose(
+        result.panel["relative_bill_rate"],
+        result.panel["relative_bill_rate_30d"],
+    )
+    np.testing.assert_allclose(
+        result.panel["term_spread"],
+        result.panel["term_spread_10y_3m"],
     )

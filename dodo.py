@@ -105,6 +105,7 @@ GENERATED_ARTIFACTS = (
     SETTINGS.reports_dir / "build" / "report_metadata.json",
     SETTINGS.reports_dir / "build" / "replication_status.txt",
     SETTINGS.reports_dir / "build" / "current_vintage_cay_comparison.csv",
+    SETTINGS.reports_dir / "build" / "table_iii_source_diagnostics.json",
 )
 REPORT_SOURCES = (
     SETTINGS.reports_dir / "paper" / "main.tex",

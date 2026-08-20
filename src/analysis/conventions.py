@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 import pandas as pd
@@ -16,6 +16,7 @@ from src.analysis.table_iii import TABLE_III_SPECS, prepare_table_iii_model
 class ConventionSelection:
     selected: str
     scores: dict[str, float]
+    candidate_metrics: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,8 @@ def _table_iii_metrics(panel: pd.DataFrame, row: int) -> dict[str, float]:
 def select_panel_conventions(
     panel: pd.DataFrame, targets: Mapping[str, Any]
 ) -> PanelConventions:
-    """Score both bill and term candidates and expose canonical panel columns."""
+    """Apply source-defined primary conventions and retain robustness metrics."""
+    _ = targets
     risk_panels: dict[str, pd.DataFrame] = {}
     risk_metrics: dict[str, dict[str, float]] = {}
     risk_definitions = {
@@ -94,15 +96,10 @@ def select_panel_conventions(
         risk_panels[name] = candidate
         risk_metrics[name] = _table_iii_metrics(candidate, 6)
 
-    row_6 = targets["table_iii"]["row_6"]
-    risk_selection = select_convention(
-        risk_metrics,
-        anchors={
-            "cay_coefficient": row_6["cay_coefficient"],
-            "adjusted_r_squared": row_6["adjusted_r_squared"],
-        },
-        tolerances={"cay_coefficient": 0.15, "adjusted_r_squared": 0.015},
-        tie_break_order=["bill_30d", "bill_3m"],
+    risk_selection = ConventionSelection(
+        selected="bill_30d",
+        scores={},
+        candidate_metrics=risk_metrics,
     )
     selected_panel = risk_panels[risk_selection.selected]
 
@@ -117,20 +114,10 @@ def select_panel_conventions(
         term_panels[name] = candidate
         term_metrics[name] = _table_iii_metrics(candidate, 13)
 
-    row_13 = targets["table_iii"]["row_13"]
-    term_selection = select_convention(
-        term_metrics,
-        anchors={
-            "cay_coefficient": row_13["cay_coefficient"],
-            "term_spread_coefficient": row_13["term_spread_coefficient"],
-            "adjusted_r_squared": row_13["adjusted_r_squared"],
-        },
-        tolerances={
-            "cay_coefficient": 0.15,
-            "term_spread_coefficient": 0.15,
-            "adjusted_r_squared": 0.015,
-        },
-        tie_break_order=["term_10y_3m", "term_10y_1y"],
+    term_selection = ConventionSelection(
+        selected="term_10y_3m",
+        scores={},
+        candidate_metrics=term_metrics,
     )
     return PanelConventions(
         panel=term_panels[term_selection.selected],

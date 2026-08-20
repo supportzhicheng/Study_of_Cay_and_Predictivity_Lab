@@ -1,4 +1,4 @@
-"""Integration test for the complete 32-artifact report build."""
+"""Integration test for the complete report artifact build."""
 
 import json
 import shutil
@@ -47,7 +47,7 @@ def report_panel(periods: int = 210) -> pd.DataFrame:
     )
 
 
-def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
+def test_complete_report_pipeline_writes_exactly_33_artifacts(tmp_path: Path):
     reports_dir = tmp_path / "reports"
     shutil.copytree(PROJECT_ROOT / "reports", reports_dir)
     targets_dir = tmp_path / "config"
@@ -72,8 +72,8 @@ def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
         git_commit="test-commit",
     )
 
-    assert len(artifacts) == 32
-    assert len({path.resolve() for path in artifacts}) == 32
+    assert len(artifacts) == 33
+    assert len({path.resolve() for path in artifacts}) == 33
     assert all(path.exists() and path.stat().st_size > 0 for path in artifacts)
     assert len(list((reports_dir / "tables").glob("*"))) == 16
     assert len(list((reports_dir / "figures").glob("*"))) == 9
@@ -99,3 +99,28 @@ def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
     assert actual_endpoint in captions
     assert "most persistent updated predictor" in captions
     assert "requiring diagnosis" in captions
+
+    diagnostics = json.loads(
+        (reports_dir / "build" / "table_iii_source_diagnostics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert diagnostics["selected"] == {
+        "risk_free": "bill_30d",
+        "term_spread": "term_10y_3m",
+    }
+    assert diagnostics["row_13"] == {
+        "sample_start": "1953Q2",
+        "observations": 181,
+        "hac_lags": 1,
+    }
+    assert diagnostics["table_vi_hac_lags"] == {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "4": 3,
+        "8": 7,
+        "12": 11,
+        "16": 15,
+        "24": 23,
+    }

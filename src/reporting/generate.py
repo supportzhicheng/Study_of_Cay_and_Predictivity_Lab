@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
@@ -148,6 +149,60 @@ def _audit_takeaway(audit: pd.DataFrame) -> str:
     )
 
 
+def _write_table_iii_source_diagnostics(
+    reports_dir: Path,
+    selections: PanelConventions,
+    table_iii: pd.DataFrame,
+    table_vi: pd.DataFrame,
+    audit: pd.DataFrame,
+) -> Path:
+    row_13 = table_iii.loc[table_iii["row"] == 13]
+    diagnostics = {
+        "historical_primary": {
+            "risk_free_return": "CRSP 30-day Treasury bill t30ret",
+            "term_spread": "10-year Treasury yield minus 3-month Treasury yield",
+            "crsp_market_return": "CRSP vwretd",
+            "quarterly_return": "sum of monthly log1p returns",
+            "relative_bill_rate": "current bill return minus prior four-quarter mean",
+            "hac_lags": "max(1, horizon - 1)",
+        },
+        "selected": {
+            "risk_free": selections.risk_free.selected,
+            "term_spread": selections.term_spread.selected,
+        },
+        "candidate_metrics": {
+            "risk_free": selections.risk_free.candidate_metrics,
+            "term_spread": selections.term_spread.candidate_metrics,
+        },
+        "row_13": {
+            "sample_start": str(row_13["sample_start"].iloc[0]),
+            "observations": int(row_13["observations"].iloc[0]),
+            "hac_lags": int(row_13["hac_lags"].iloc[0]),
+        },
+        "table_vi_hac_lags": {
+            str(int(horizon)): int(group["hac_lags"].iloc[0])
+            for horizon, group in table_vi.groupby("horizon", sort=True)
+        },
+        "sensitivity_checks": {
+            "vwretx": "ruled out; the historical source contract uses vwretd",
+            "t90ret": "ruled out; the historical source contract uses t30ret",
+            "return_arithmetic": "ruled out; monthly log1p returns are summed quarterly",
+            "predictor_timing": "ruled out; date-t predictors forecast t+1 outcomes",
+            "cay_calibration": "ruled out; historical CAY remains independently estimated DLS",
+        },
+        "audit_status_counts": {
+            str(status): int(count)
+            for status, count in audit["status"].value_counts().items()
+        },
+    }
+    path = reports_dir / "build" / "table_iii_source_diagnostics.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(diagnostics, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return path
+
+
 def _write_table(
     frame: pd.DataFrame,
     reports_dir: Path,
@@ -206,6 +261,13 @@ def generate_report_artifacts(
         table_iii_historical,
         table_vi_historical,
         targets,
+    )
+    diagnostics_path = _write_table_iii_source_diagnostics(
+        reports_dir,
+        selections,
+        table_iii_historical,
+        table_vi_historical,
+        audit,
     )
 
     labels = _caption_labels(reports_dir)
@@ -321,6 +383,7 @@ def generate_report_artifacts(
             metadata_json,
             status_text,
             comparison_path,
+            diagnostics_path,
         ]
     )
 
@@ -344,6 +407,6 @@ def generate_report_artifacts(
         git_commit=git_commit,
     )
     artifacts.append(manifest_path)
-    if len(artifacts) != 32:
-        raise RuntimeError(f"Expected 32 report artifacts, generated {len(artifacts)}.")
+    if len(artifacts) != 33:
+        raise RuntimeError(f"Expected 33 report artifacts, generated {len(artifacts)}.")
     return artifacts

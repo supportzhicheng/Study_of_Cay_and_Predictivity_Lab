@@ -35,7 +35,11 @@ def test_pipeline_actions_discard_library_return_values(monkeypatch):
 
 def test_run_tests_passes_junit_path_as_one_argument(monkeypatch):
     calls = []
-    monkeypatch.setattr(dodo.subprocess, "run", lambda command, **kwargs: calls.append((command, kwargs)))
+    monkeypatch.setattr(
+        dodo.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append((command, kwargs)),
+    )
 
     assert dodo.task_run_tests()["actions"][0]() is None
 
@@ -99,7 +103,7 @@ def test_doit_targets_have_one_owner_and_required_edges():
             owners[target] = task_name
 
     assert len(tasks["build_panel"]["targets"]) == 2
-    assert len(tasks["generate_exhibits"]["targets"]) == 32
+    assert len(tasks["generate_exhibits"]["targets"]) == 33
     assert tasks["generate_exhibits"]["task_dep"] == ["build_panel"]
     assert tasks["run_notebook"]["task_dep"] == ["generate_exhibits"]
     assert tasks["compile_report"]["task_dep"] == [

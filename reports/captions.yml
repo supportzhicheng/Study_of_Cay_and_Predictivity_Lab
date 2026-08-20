@@ -23,7 +23,7 @@ figure_1_replication:
   notes_required:
     - "Both series standardized over the displayed sample"
     - "NBER recession shading"
-    - "Risk-free-rate definition"
+    - "Excess returns use the CRSP 30-day Treasury bill return"
     - "Sample dates"
   source: "Lettau and Ludvigson (2001), Figure 1"
 
@@ -36,8 +36,8 @@ table_iii_replication:
     Because the dependent variable includes excess returns, the key coefficients speak
     directly to variation in the equity risk premium.
   notes_required:
-    - "Newey-West inference rule"
-    - "S&P versus CRSP return definitions"
+    - "Newey-West HAC inference uses one lag"
+    - "S&P and CRSP excess returns are net of the CRSP 30-day bill return"
     - "Row 13 common-sample exception"
     - "Sample dates"
   source: "Lettau and Ludvigson (2001), Table III"
@@ -53,7 +53,7 @@ table_vi_replication:
   notes_required:
     - "Forward cumulative outcome construction"
     - "Horizons in quarters"
-    - "HAC treatment of overlapping observations"
+    - "Overlapping-outcome HAC lags use max(1, horizon minus 1)"
     - "Sample dates"
   source: "Lettau and Ludvigson (2001), Table VI"
 
