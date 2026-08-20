@@ -27,6 +27,7 @@ from src.analysis.table_vi import build_table_vi
 from src.data.build_quarterly_panel import HISTORICAL_INDEX, latest_common_quarter
 from src.extension.chartbook import write_predictivity_chartbook
 from src.extension.predictivity import rolling_predictivity
+from src.reporting.tables import table_1, table_2, table_3
 
 if TYPE_CHECKING:
     from src.settings import Settings
@@ -237,12 +238,49 @@ def _write_extension_replication_artifacts(
     table_vi_csv = tables_dir / "table_vi_extension_cay_r.csv"
     table_vi_tex = tables_dir / "table_vi_extension_cay_r.tex"
 
-    _table_ii_frame(table_ii).to_csv(table_ii_csv, index=False)
-    _table_ii_frame(table_ii).to_latex(table_ii_tex, index=False, escape=True)
-    table_iii.to_csv(table_iii_csv, index=False)
-    table_iii.to_latex(table_iii_tex, index=False, escape=True)
-    table_vi.to_csv(table_vi_csv, index=False)
-    table_vi.to_latex(table_vi_tex, index=False, escape=True)
+    publications = (
+        (
+            table_1(table_ii).frame,
+            table_ii_csv,
+            table_ii_tex,
+            "Regional-Proxy CAY Summary Statistics",
+            "tab:regional_summary",
+        ),
+        (
+            table_2(table_iii).frame,
+            table_iii_csv,
+            table_iii_tex,
+            "Regional-Proxy One-Quarter Return Forecasts",
+            "tab:regional_one_quarter",
+        ),
+        (
+            table_3(table_vi).frame,
+            table_vi_csv,
+            table_vi_tex,
+            "Regional-Proxy Long-Horizon Forecasts",
+            "tab:regional_long_horizon",
+        ),
+    )
+    for frame, csv_path, tex_path, title, label in publications:
+        frame.to_csv(csv_path, index=False)
+        tabular = frame.to_latex(index=False, escape=True, na_rep="")
+        tex_path.write_text(
+            "\n".join(
+                [
+                    r"\begin{table}[htbp]",
+                    r"\centering",
+                    rf"\caption{{{title}}}",
+                    rf"\label{{{label}}}",
+                    r"\small",
+                    r"\resizebox{\textwidth}{!}{%",
+                    tabular,
+                    r"}",
+                    r"\end{table}",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
 
     figure = plot_figure_1(figure_1)
     figure_pdf = figures_dir / "figure_1_extension_cay_r.pdf"
@@ -257,8 +295,8 @@ def _write_extension_replication_artifacts(
                 r"\begin{figure}[htbp]",
                 r"\centering",
                 r"\includegraphics[width=\linewidth]{generated/figures/figure_1_extension_cay_r.pdf}",
-                r"\caption{Standardized $cay_R$ and excess S\&P returns.}",
-                r"\label{fig:figure_1_extension_cay_r}",
+                r"\caption{Regional-Proxy CAY and Excess Returns. Federal Reserve Z.1 and FRED regional proxies; CRSP excess returns.}",
+                r"\label{fig:regional_cay_returns}",
                 r"\end{figure}",
                 "",
             ]
@@ -334,7 +372,7 @@ def write_extension_report_section(
         \subsection{{Overview}}
 
         This extension constructs a Regional Replication predictor, denoted $cay_R$,
-        from \texttt{{cay\_components\_region\_ca\_il\_tx\_q\_proxy.csv}} and
+        from the normalized California, Illinois, and Texas proxy panel and
         reruns the replication-style forecasting pipeline with the
         \textit{{same model specifications}} used in the main report,
         replacing only the $cay$ construction.
@@ -358,7 +396,7 @@ def write_extension_report_section(
 
         \subsection{{How to Read the Extension Figure}}
 
-        Figure \ref{{fig:figure_1_extension_cay_r}} follows the same display
+        Figure \ref{{fig:regional_cay_returns}} follows the same display
         convention as the replication figure.  Both lines are standardized in
         displayed-sample units, so crossings indicate relative (not level)
         comovement.  Gray recession shading marks NBER downturn quarters.
@@ -367,9 +405,8 @@ def write_extension_report_section(
         Tables III and VI; statistical significance should be assessed from those
         tables rather than from line overlap alone.
 
-        Full rolling chartbook outputs remain available in
-        \texttt{{extension\_chartbook.pdf}}
-        and \texttt{{extension\_rolling.csv}}.
+        Full rolling chartbook and machine-readable forecast outputs remain
+        available under the extension output directory.
 
         \subsection{{Comparison with National Results}}
 

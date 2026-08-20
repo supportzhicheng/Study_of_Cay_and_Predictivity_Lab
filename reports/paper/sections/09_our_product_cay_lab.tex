@@ -1,144 +1,18 @@
 \section{Our Product: CAY Lab}
 \label{sec:our_product_cay_lab}
 
-The next stage of this project is to package the replication and extension
-workflow into a user-facing CAY Lab. The objective is to keep the empirical
-pipeline transparent while allowing users to run customized predictivity
-studies without rewriting analysis code.
+CAY Lab exposes decomposition choice, sample range, training window,
+predictive horizon, and risky-asset target while preserving the project's
+econometric definitions. The root workflow records those choices and consumes
+only declared data caches.
 
-\subsection{Product Scope}
+\subsection{Worked Example: Wealth Groups and QQQ}
 
-CAY Lab is designed around four user-controlled functions:
-\begin{enumerate}
-  \item \textbf{Choose the CAY variant.} Users can select the decomposition
-  family they want to analyze (\texttt{house\_wealth},
-  \texttt{region\_proxy}, or \texttt{wealth\_groups}). The required CSV inputs
-  are generated locally under \texttt{cay\_data/} using user-provided
-  credentials and are not bundled as real datasets in version control.
+The worked example uses Federal Reserve Distributional Financial Accounts
+wealth-group detail and a declared QQQ adjusted-close cache. It forecasts
+two-quarter QQQ log returns with an eight-quarter rolling training window for
+the bottom 50 percent, middle 40 percent, and top 10 percent wealth groups.
+The generated manifest records the segment, page, sample, target, label, and
+QQQ source hash for each figure.
 
-  \item \textbf{Choose the training window.} Users can set the estimation
-  window (sample range / rolling training length) to match their preferred
-  historical regime.
-
-  \item \textbf{Choose the predictive horizon.} Users can select whether CAY is
-  evaluated for near-term or medium-term predictivity (for example 1-quarter,
-  4-quarter, or 8-quarter horizons).
-
-  \item \textbf{Choose the risky asset target.} Users can specify a ticker
-  (for example \texttt{QQQ}) and CAY Lab forecasts that asset's forward
-  return.
-\end{enumerate}
-
-\subsection{Interpretation and Reproducibility}
-
-These controls are intended to change \emph{inputs and horizons}, not to change
-core econometric definitions silently. Every run should preserve explicit sample
-metadata, selected options, and generated artifacts so users can compare
-results across CAY definitions and risky-asset targets in a reproducible way.
-
-\subsection{Official CAY Lab Runtime Interface}
-
-The \texttt{doit} interface exposes the four product controls directly:
-\begin{itemize}
-  \item \textbf{Input range:} \texttt{--input-start}, \texttt{--input-end}
-  \item \textbf{Prediction period:} \texttt{--prediction-period}
-  \item \textbf{Decomposed CAY choice:} \texttt{--cay-decomposition}
-  \item \textbf{Risky asset ticker:} \texttt{--risky-ticker} (or
-  \texttt{--risky-tickers} for a comma-separated list)
-\end{itemize}
-
-Example invocation:
-\begin{verbatim}
-doit extension_section9_chartbook \
-  --cay-decomposition house_wealth_groups \
-  --input-start 2023Q1 \
-  --input-end 2026Q1 \
-  --prediction-period 2 \
-  --train-periods 8 \
-  --risky-ticker QQQ
-\end{verbatim}
-
-For policy compliance, real decomposition datasets are not committed to the
-repository. Users must generate local \texttt{cay\_data/*.csv} files with their
-own credentials before running this command.
-
-\subsection{Worked Example (Wealth Groups, 2-Quarter QQQ Horizon)}
-
-To demonstrate the product workflow, we ran CAY Lab with:
-\begin{itemize}
-  \item dataset: \texttt{cay\_components\_wealth\_groups\_q.csv},
-  \item requested sample range: 2023Q1--2026Q2,
-  \item predictive window: 2 quarters,
-  \item risky asset ticker: \texttt{QQQ}.
-\end{itemize}
-
-Because the latest available quarter in the current wealth-group source is
-2026Q1, the effective upper bound is 2026Q1. After predictor construction, the
-usable input panel runs 2023Q2--2026Q1. Because the target is a realized
-2-quarter-ahead QQQ return, the last quarter with an observable realized target
-in this run is 2025Q3, so the evaluated forecasting sample is 2023Q2--2025Q3.
-For rolling diagnostics, we use an 8-quarter training window so in-sample
-$R^2$ is not mechanically one (a 4-quarter window with three predictors plus
-intercept is exactly identified and can force perfect in-sample fit).
-The generated artifacts include:
-\begin{itemize}
-  \item \texttt{subcay\_predictivity\_prepared.csv},
-  \item \texttt{subcay\_predictivity\_tests.csv},
-  \item \texttt{subcay\_predictivity\_rolling.csv},
-  \item \texttt{chartbook\_subcay\_predictivity.pdf}.
-\end{itemize}
-
-\IfFileExists{../../_output/extension/section9/chartbook_subcay_predictivity.pdf}{
-  \begin{figure}[htbp]
-    \centering
-    \includegraphics[page=2,width=\linewidth]{../../_output/extension/section9/chartbook_subcay_predictivity.pdf}
-    \caption{Worked-example chartbook diagnostics for one wealth-group segment (page 2).}
-    \label{fig:caylab_worked_example_p2}
-  \end{figure}
-
-  \noindent\textit{Narrative (Figure 5).} This page corresponds to the
-  \texttt{bottom50} segment. In the segment-level regression,
-  \texttt{sub\_cay\_financial} ($t\approx-6.99$) and
-  \texttt{sub\_cay\_liquid} ($t\approx5.49$) are strongly active, while
-  \texttt{sub\_cay\_housing} is weaker ($t\approx-1.95$).
-
-  \begin{figure}[htbp]
-    \centering
-    \includegraphics[page=3,width=\linewidth]{../../_output/extension/section9/chartbook_subcay_predictivity.pdf}
-    \caption{Worked-example chartbook diagnostics for one wealth-group segment (page 3).}
-    \label{fig:caylab_worked_example_p3}
-  \end{figure}
-
-  \noindent\textit{Narrative (Figure 6).} This page corresponds to the
-  \texttt{middle40} segment. Both \texttt{sub\_cay\_financial}
-  ($t\approx-6.14$) and \texttt{sub\_cay\_liquid} ($t\approx6.27$) are
-  strongly significant, while housing remains weak ($t\approx0.86$).
-
-  \begin{figure}[htbp]
-    \centering
-    \includegraphics[page=4,width=\linewidth]{../../_output/extension/section9/chartbook_subcay_predictivity.pdf}
-    \caption{Worked-example chartbook diagnostics for one wealth-group segment (page 4).}
-    \label{fig:caylab_worked_example_p4}
-  \end{figure}
-
-  \noindent\textit{Narrative (Figure 7).} This page corresponds to the
-  \texttt{top10} segment. The financial and liquid sub-CAY terms are both very
-  strong (\texttt{sub\_cay\_financial} $t\approx-12.79$;
-  \texttt{sub\_cay\_liquid} $t\approx14.60$), while housing is comparatively
-  weaker ($t\approx1.76$). The segment-level fit is also strongest in this
-  group ($R^2\approx0.93$ versus $\approx0.84$ for the other two groups),
-  and the rolling-window in-sample fit remains highest for \texttt{top10}
-  across evaluation quarters.
-
-  \noindent\textbf{Worked-example conclusion.} Across the three wealth groups,
-  \texttt{sub\_cay\_financial} and \texttt{sub\_cay\_liquid} jointly provide the
-  strongest predictive power for 2-quarter-ahead QQQ returns, with consistent
-  large absolute t-statistics in all three segments; \texttt{sub\_cay\_housing}
-  is materially weaker in this window. Within this run, the \texttt{top10}
-  household group shows stronger predictive power for QQQ than \texttt{middle40}
-  and \texttt{bottom50}, based on both higher segment-level $R^2$ and stronger
-  coefficient t-statistics.
-}{
-  \textbf{Worked-example plots unavailable.} Re-run the QQQ worked example to
-  regenerate \texttt{chartbook\_subcay\_predictivity.pdf}.
-}
+\input{generated/section9_figures}

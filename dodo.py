@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 from src.bootstrap_real_data import bootstrap_real_data
 from src.data.build_extension_s14 import build_s14_components
 from src.data.build_extension_sources import (
@@ -20,7 +22,7 @@ from src.data.extension_acquisition import (
 from src.data.import_local import import_local_source
 from src.data.pull_author_cay import ensure_author_data
 from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
-from src.extension.chartbook import build_chartbook
+from src.extension.chartbook import build_chartbook, write_section9_manifest
 from src.extension.pipeline import (
     PANEL_STEM as EXTENSION_PANEL_STEM,
 )
@@ -71,6 +73,8 @@ SECTION9_CHARTBOOK_TARGETS = (
     SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_tests.csv",
     SECTION9_CHARTBOOK_OUTPUT_DIR / "subcay_predictivity_rolling.csv",
     SECTION9_CHARTBOOK_OUTPUT_DIR / "chartbook_subcay_predictivity.pdf",
+    SECTION9_CHARTBOOK_OUTPUT_DIR / "section9_manifest.json",
+    SETTINGS.reports_dir / "paper" / "generated" / "section9_figures.tex",
 )
 SECTION9_QQQ_CACHE = SETTINGS.extension_raw_dir / "market" / "QQQ.csv"
 EXTENSION_FRED_IDS = (
@@ -86,35 +90,34 @@ EXTENSION_FRED_IDS = (
     "TXPOP",
 )
 
-TABLE_IDS = (
-    "table_ii_replication",
-    "table_ii_updated",
+REPORT_CONTRACT = yaml.safe_load(
+    (SETTINGS.reports_dir / "report_contract.yml").read_text(encoding="utf-8")
+)
+CORE_EXHIBIT_PATHS = tuple(
+    SETTINGS.reports_dir / relative
+    for entry in REPORT_CONTRACT["exhibits"].values()
+    for relative in entry["paths"].values()
+    if relative.startswith(("tables/", "figures/"))
+)
+APPENDIX_IDS = (
     "table_iii_replication",
     "table_iii_updated",
     "table_vi_replication",
     "table_vi_updated",
-    "table_s1_core_data_summary",
     "table_r1_replication_audit",
 )
-FIGURE_IDS = (
-    "figure_1_replication",
-    "figure_1_updated",
-    "figure_s1_data_anatomy",
-)
 GENERATED_ARTIFACTS = (
+    *CORE_EXHIBIT_PATHS,
     *(
-        SETTINGS.reports_dir / "tables" / f"{artifact_id}.{suffix}"
-        for artifact_id in TABLE_IDS
+        SETTINGS.reports_dir / "tables" / "appendix" / f"{artifact_id}_detail.{suffix}"
+        for artifact_id in APPENDIX_IDS
         for suffix in ("csv", "tex")
-    ),
-    *(
-        SETTINGS.reports_dir / "figures" / f"{artifact_id}.{suffix}"
-        for artifact_id in FIGURE_IDS
-        for suffix in ("pdf", "png", "tex")
     ),
     SETTINGS.reports_dir / "paper" / "generated" / "report_metadata.tex",
     SETTINGS.reports_dir / "paper" / "generated" / "replication_status.tex",
     SETTINGS.reports_dir / "paper" / "generated" / "generated_captions.tex",
+    SETTINGS.reports_dir / "paper" / "generated" / "empirical_findings.tex",
+    SETTINGS.reports_dir / "paper" / "generated" / "appendix_tables.tex",
     SETTINGS.reports_dir / "build" / "report_metadata.json",
     SETTINGS.reports_dir / "build" / "replication_status.txt",
     SETTINGS.reports_dir / "build" / "current_vintage_cay_comparison.csv",
@@ -281,7 +284,6 @@ def task_generate_exhibits():
             str(PANEL_PATH),
             str(PANEL_METADATA_PATH),
             str(TARGETS_PATH),
-            str(SETTINGS.reports_dir / "captions.yml"),
             str(SETTINGS.reports_dir / "report_config.yml"),
             str(SETTINGS.reports_dir / "report_contract.yml"),
         ],
@@ -498,6 +500,11 @@ def _run_extension_section9_chartbook() -> None:
         output_dir=str(SECTION9_CHARTBOOK_OUTPUT_DIR),
         cay_data_dir=str(SETTINGS.extension_normalized_dir),
         market_data_dir=str(SETTINGS.extension_raw_dir / "market"),
+    )
+    write_section9_manifest(
+        SECTION9_CHARTBOOK_OUTPUT_DIR,
+        SECTION9_QQQ_CACHE,
+        SETTINGS.reports_dir / "paper" / "generated" / "section9_figures.tex",
     )
 
 

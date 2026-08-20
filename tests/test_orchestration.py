@@ -109,7 +109,9 @@ def test_doit_targets_have_one_owner_and_required_edges():
 
     assert len(tasks["build_panel"]["targets"]) == 2
     assert "normalize_pulled_sources" in tasks["build_panel"]["task_dep"]
-    assert len(tasks["generate_exhibits"]["targets"]) == 33
+    assert set(tasks["generate_exhibits"]["targets"]) == {
+        str(path) for path in (*dodo.GENERATED_ARTIFACTS, dodo.MANIFEST_PATH)
+    }
     assert tasks["generate_exhibits"]["task_dep"] == ["build_panel"]
     assert tasks["run_notebook"]["task_dep"] == ["generate_exhibits"]
     assert tasks["compile_report"]["task_dep"] == [
@@ -127,8 +129,8 @@ def test_doit_targets_have_one_owner_and_required_edges():
         dodo.PANEL_PATH,
         dodo.PANEL_METADATA_PATH,
         dodo.TARGETS_PATH,
-        dodo.SETTINGS.reports_dir / "captions.yml",
         dodo.SETTINGS.reports_dir / "report_config.yml",
+        dodo.SETTINGS.reports_dir / "report_contract.yml",
     ):
         assert str(path) in exhibit_dependencies
 

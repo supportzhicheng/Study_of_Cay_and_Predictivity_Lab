@@ -31,7 +31,21 @@ from src.data.build_quarterly_panel import HISTORICAL_INDEX, latest_common_quart
 from src.reporting.artifacts import write_artifact_manifest
 from src.reporting.audit import write_replication_status
 from src.reporting.captions import caption_macro_name, write_caption_macros
+from src.reporting.contract import load_report_contract
+from src.reporting.findings import write_empirical_findings
 from src.reporting.metadata import write_report_metadata
+from src.reporting.tables import (
+    PublicationTable,
+    table_1,
+    table_2,
+    table_3,
+    table_4,
+    table_5,
+    table_6,
+    table_7,
+    table_8,
+    validate_publication_table,
+)
 
 
 def _apply_selected_conventions(
@@ -72,7 +86,10 @@ def _table_s1_frame(result: TableS1Result) -> pd.DataFrame:
 
 
 def _caption_labels(reports_dir: Path) -> dict[str, str]:
-    entries = yaml.safe_load((reports_dir / "captions.yml").read_text(encoding="utf-8"))
+    contract = yaml.safe_load(
+        (reports_dir / "report_contract.yml").read_text(encoding="utf-8")
+    )
+    entries = contract["exhibits"]
     return {artifact_id: entry["label"] for artifact_id, entry in entries.items()}
 
 
@@ -219,6 +236,63 @@ def _write_table(
     return [paths.csv, paths.tex]
 
 
+def _write_appendix_tables(
+    reports_dir: Path, publications: Mapping[str, PublicationTable]
+) -> list[Path]:
+    appendix_dir = reports_dir / "tables" / "appendix"
+    appendix_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    inputs: list[str] = []
+    for artifact_id, publication in publications.items():
+        if publication.appendix is None:
+            continue
+        csv_path = appendix_dir / f"{artifact_id}_detail.csv"
+        tex_path = appendix_dir / f"{artifact_id}_detail.tex"
+        publication.appendix.to_csv(csv_path, index=False)
+        detail = publication.appendix.copy()
+        if artifact_id.startswith("table_iii"):
+            detail = detail[
+                [
+                    "row",
+                    "term",
+                    "coefficient",
+                    "t_statistic",
+                    "adjusted_r_squared",
+                    "observations",
+                ]
+            ]
+        elif artifact_id.startswith("table_vi"):
+            detail = detail[
+                [
+                    "specification",
+                    "horizon",
+                    "term",
+                    "coefficient",
+                    "t_statistic",
+                    "adjusted_r_squared",
+                    "observations",
+                ]
+            ]
+        elif artifact_id == "table_r1_replication_audit":
+            detail = detail[["metric", "actual", "target", "status"]]
+        longtable = detail.to_latex(index=False, escape=True, na_rep="", longtable=True)
+        tex_path.write_text(
+            "\n".join(
+                [r"\begin{landscape}", r"\scriptsize", longtable, r"\end{landscape}"]
+            ),
+            encoding="utf-8",
+        )
+        paths.extend([csv_path, tex_path])
+        inputs.append(rf"\input{{../tables/appendix/{artifact_id}_detail.tex}}")
+    include_path = reports_dir / "paper" / "generated" / "appendix_tables.tex"
+    include_path.parent.mkdir(parents=True, exist_ok=True)
+    include_path.write_text(
+        "\n" + "\n\\clearpage\n".join(inputs) + "\n", encoding="utf-8"
+    )
+    paths.append(include_path)
+    return paths
+
+
 def generate_report_artifacts(
     panel: pd.DataFrame,
     reports_dir: Path,
@@ -231,6 +305,9 @@ def generate_report_artifacts(
 ) -> list[Path]:
     """Generate the exact report artifact contract from observed panel data."""
     vintage = data_vintage or date.today().isoformat()
+    contract = load_report_contract(
+        reports_dir / "report_contract.yml", reports_dir.parent
+    )
     targets = load_paper_targets(targets_path)
     modes = estimate_analysis_modes(panel, leads_lags=8)
 
@@ -271,18 +348,23 @@ def generate_report_artifacts(
     )
 
     labels = _caption_labels(reports_dir)
+    publications = {
+        "table_ii_replication": table_1(table_ii_historical),
+        "table_ii_updated": table_4(table_ii_historical, table_ii_updated),
+        "table_iii_replication": table_2(table_iii_historical),
+        "table_iii_updated": table_5(table_iii_historical, table_iii_updated),
+        "table_vi_replication": table_3(table_vi_historical),
+        "table_vi_updated": table_6(table_vi_historical, table_vi_updated),
+        "table_s1_core_data_summary": table_7(table_s1),
+        "table_r1_replication_audit": table_8(audit),
+    }
     artifacts: list[Path] = []
-    for artifact_id, frame in (
-        ("table_ii_replication", _table_ii_frame(table_ii_historical)),
-        ("table_ii_updated", _table_ii_frame(table_ii_updated)),
-        ("table_iii_replication", table_iii_historical),
-        ("table_iii_updated", table_iii_updated),
-        ("table_vi_replication", table_vi_historical),
-        ("table_vi_updated", table_vi_updated),
-        ("table_s1_core_data_summary", _table_s1_frame(table_s1)),
-        ("table_r1_replication_audit", audit),
-    ):
-        artifacts.extend(_write_table(frame, reports_dir, artifact_id, labels))
+    for artifact_id, publication in publications.items():
+        validate_publication_table(publication)
+        artifacts.extend(
+            _write_table(publication.frame, reports_dir, artifact_id, labels)
+        )
+    artifacts.extend(_write_appendix_tables(reports_dir, publications))
 
     figure_data = {
         "figure_1_replication": prepare_figure_1(historical),
@@ -304,6 +386,20 @@ def generate_report_artifacts(
         )
         plt.close(figure)
         artifacts.extend([paths.pdf, paths.png, paths.tex])
+
+    findings_path = write_empirical_findings(
+        reports_dir / "paper" / "generated" / "empirical_findings.tex",
+        historical_summary=table_ii_historical,
+        updated_summary=table_ii_updated,
+        historical_table_iii=table_iii_historical,
+        updated_table_iii=table_iii_updated,
+        historical_table_vi=table_vi_historical,
+        updated_table_vi=table_vi_updated,
+        historical_figure=figure_data["figure_1_replication"],
+        updated_figure=figure_data["figure_1_updated"],
+        data_summary=table_s1,
+    )
+    artifacts.append(findings_path)
 
     updated_end = latest_common_quarter(
         updated,
@@ -355,6 +451,19 @@ def generate_report_artifacts(
         },
     }
     calculated_takeaways = {
+        "table_ii_replication": (
+            f"Historical CAY has AR(1)={table_ii_historical.summary.loc['cay', 'ar1']:.3f}."
+        ),
+        "figure_1_replication": (
+            "Formal predictive evidence is reported in the historical forecasting tables."
+        ),
+        "table_iii_replication": _table_iii_takeaway(
+            table_iii_historical, table_iii_updated
+        ).split(" and ")[0]
+        + ".",
+        "table_vi_replication": (
+            "The two panels distinguish consumption-growth and excess-return channels."
+        ),
         "table_ii_updated": _table_ii_takeaway(table_ii_historical, table_ii_updated),
         "figure_1_updated": (
             "The updated displayed-sample contemporaneous cay-return correlation is "
@@ -366,10 +475,13 @@ def generate_report_artifacts(
         ),
         "table_vi_updated": _table_vi_takeaway(table_vi_updated),
         "table_s1_core_data_summary": table_s1.takeaway,
+        "figure_s1_data_anatomy": (
+            "The levels share a long-run trend while growth rates reveal short-run divergence."
+        ),
         "table_r1_replication_audit": _audit_takeaway(audit),
     }
     captions_tex = write_caption_macros(
-        reports_dir / "captions.yml",
+        reports_dir / "report_contract.yml",
         reports_dir / "paper" / "generated" / "generated_captions.tex",
         sample_dates=sample_dates,
         data_vintage=vintage,
@@ -390,7 +502,6 @@ def generate_report_artifacts(
     source_dependencies = [
         panel_path,
         panel_metadata_path,
-        reports_dir / "captions.yml",
         targets_path,
         reports_dir / "report_contract.yml",
         reports_dir / "report_config.yml",
@@ -399,14 +510,24 @@ def generate_report_artifacts(
         f"artifact_{index:02d}": path for index, path in enumerate(artifacts, start=1)
     }
     dependency_map = {artifact_id: source_dependencies for artifact_id in artifact_map}
+    registry_sources = {
+        path: entry["source_ids"]
+        for entry in contract["exhibits"].values()
+        for path in entry["paths"].values()
+    }
+    artifact_source_ids = {
+        artifact_id: registry_sources.get(
+            str(path.resolve().relative_to(reports_dir.resolve())), []
+        )
+        for artifact_id, path in artifact_map.items()
+    }
     manifest_path = write_artifact_manifest(
         artifact_map,
         dependency_map,
         reports_dir / "build" / "artifact_manifest.json",
         reports_dir / "schemas" / "artifact_manifest.schema.json",
         git_commit=git_commit,
+        source_ids=artifact_source_ids,
     )
     artifacts.append(manifest_path)
-    if len(artifacts) != 33:
-        raise RuntimeError(f"Expected 33 report artifacts, generated {len(artifacts)}.")
     return artifacts

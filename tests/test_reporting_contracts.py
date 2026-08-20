@@ -11,10 +11,27 @@ from src.analysis.table_r1 import PASS_REVISED_VINTAGE, PASS_STRICT
 from src.reporting.artifacts import write_artifact_manifest
 from src.reporting.audit import write_replication_status
 from src.reporting.captions import caption_macro_name, write_caption_macros
+from src.reporting.contract import load_report_contract
 from src.reporting.latex import compile_latex_report
 from src.reporting.metadata import write_report_metadata
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_report_contract_registers_all_unique_exhibits():
+    contract = load_report_contract(
+        PROJECT_ROOT / "reports" / "report_contract.yml", PROJECT_ROOT
+    )
+    exhibits = contract["exhibits"]
+
+    assert len(exhibits) == 18
+    assert len({entry["label"] for entry in exhibits.values()}) == 18
+    assert [
+        entry["number"] for entry in exhibits.values() if entry["kind"] == "table"
+    ] == list(range(1, 12))
+    assert [
+        entry["number"] for entry in exhibits.values() if entry["kind"] == "figure"
+    ] == list(range(1, 8))
 
 
 def copy_schemas(destination: Path) -> None:
@@ -48,9 +65,9 @@ def test_report_metadata_writes_schema_valid_json_and_tex(tmp_path: Path):
 
 
 def test_caption_generation_requires_dates_and_calculated_takeaway(tmp_path: Path):
-    captions = tmp_path / "captions.yml"
+    captions = tmp_path / "report_contract.yml"
     captions.write_text(
-        "table_test:\n  title: S&P test table\n  label: tab:test\n  takeaway: sample_mean changed 5%\n",
+        "exhibits:\n  table_test:\n    title: S&P test table\n    label: tab:test\n    source_note: Explicit source\n",
         encoding="utf-8",
     )
     output = tmp_path / "generated_captions.tex"
@@ -60,7 +77,7 @@ def test_caption_generation_requires_dates_and_calculated_takeaway(tmp_path: Pat
         output,
         sample_dates={"table_test": ("1952Q4", "1998Q3")},
         data_vintage="2026-08-18",
-        calculated_takeaways={},
+        calculated_takeaways={"table_test": "sample_mean changed 5%"},
     )
 
     text = output.read_text(encoding="utf-8")
@@ -87,9 +104,9 @@ def test_caption_macro_name_replaces_digits_for_latex_command_safety():
 
 
 def test_caption_generation_escapes_latex_special_characters(tmp_path: Path):
-    captions = tmp_path / "captions.yml"
+    captions = tmp_path / "report_contract.yml"
     captions.write_text(
-        "table_test:\n  title: S&P summary\n  label: tab:test\n  takeaway: Uses a_b and {check}\n",
+        "exhibits:\n  table_test:\n    title: S&P summary\n    label: tab:test\n    source_note: Explicit source\n",
         encoding="utf-8",
     )
     output = tmp_path / "generated_captions.tex"
@@ -98,7 +115,7 @@ def test_caption_generation_escapes_latex_special_characters(tmp_path: Path):
         output,
         sample_dates={"table_test": ("1952Q4", "1998Q3")},
         data_vintage="2026-08-18",
-        calculated_takeaways={},
+        calculated_takeaways={"table_test": "Uses a_b and {check}"},
     )
     text = output.read_text(encoding="utf-8")
     assert r"S\&P" in text
@@ -139,9 +156,11 @@ def test_artifact_manifest_hashes_dependencies_and_rejects_stale(tmp_path: Path)
     )
     manifest = json.loads(output.read_text(encoding="utf-8"))
     assert len(manifest["artifacts"][0]["sha256"]) == 64
-    assert manifest["artifacts"][0]["source_dependencies"] == [
-        str(path) for path in dependencies
-    ]
+    assert all(
+        not Path(path).is_absolute()
+        for path in manifest["artifacts"][0]["source_dependencies"]
+    )
+    assert manifest["artifacts"][0]["source_ids"] == []
 
     for dependency in dependencies:
         os.utime(dependency, (3, 3))
@@ -158,6 +177,9 @@ def test_artifact_manifest_hashes_dependencies_and_rejects_stale(tmp_path: Path)
 
 def test_missing_latex_compiler_writes_actionable_log(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("src.reporting.latex.shutil.which", lambda _: None)
+    monkeypatch.setattr(
+        "src.reporting.latex.sys.executable", str(tmp_path / "missing" / "python")
+    )
 
     with pytest.raises(RuntimeError, match="latexmk or install Tectonic"):
         compile_latex_report(tmp_path)
@@ -175,8 +197,10 @@ def test_compile_report_falls_back_to_tectonic(tmp_path: Path, monkeypatch):
     )
     monkeypatch.setattr(
         "src.reporting.latex.subprocess.run",
-        lambda command, **kwargs: calls.append((command, kwargs))
-        or type("Result", (), {"stdout": "built", "stderr": "", "returncode": 0})(),
+        lambda command, **kwargs: (
+            calls.append((command, kwargs))
+            or type("Result", (), {"stdout": "built", "stderr": "", "returncode": 0})()
+        ),
     )
 
     result = compile_latex_report(tmp_path)

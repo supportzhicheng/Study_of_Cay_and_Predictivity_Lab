@@ -1,84 +1,248 @@
-contract_version: 2
-manual_inputs:
-- report_contract.yml
-- .gitignore
-- report_config.yml
-- captions.yml
-- source_manifest.yml
-- rubric_mapping.yml
-- paper/main.tex
-- paper/preamble.tex
-- paper/references.bib
-- paper/sections/*.tex
+contract_version: 3
+exhibits:
+  table_ii_replication:
+    kind: table
+    number: 1
+    title: Historical Summary Statistics and Correlations
+    label: tab:historical_summary
+    section: historical_replication
+    role: historical_summary
+    paths: {tex: tables/table_ii_replication.tex, csv: tables/table_ii_replication.csv}
+    sample_rule: historical_complete_case
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [shiller_data, crsp_data, fred]
+    source_ids: [paper_macro, sp_market, crsp_market, rates]
+    source_note: Authors' calculations benchmarked to Lettau and Ludvigson Table II.
+  table_iii_replication:
+    kind: table
+    number: 2
+    title: Historical One-Quarter Return Forecasts
+    label: tab:historical_one_quarter
+    section: historical_replication
+    role: historical_short_horizon
+    paths: {tex: tables/table_iii_replication.tex, csv: tables/table_iii_replication.csv}
+    sample_rule: row_specific_historical
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [shiller_data, crsp_data, fred]
+    source_ids: [paper_macro, sp_market, crsp_market, rates]
+    source_note: Authors' calculations using the source-defined historical return contract.
+  table_vi_replication:
+    kind: table
+    number: 3
+    title: Historical Long-Horizon CAY Regressions
+    label: tab:historical_long_horizon
+    section: historical_replication
+    role: historical_long_horizon
+    paths: {tex: tables/table_vi_replication.tex, csv: tables/table_vi_replication.csv}
+    sample_rule: horizon_specific_historical
+    benchmark_citations: [lettau_ludvigson_2001, newey_west_1987]
+    provider_citations: [shiller_data, crsp_data, fred]
+    source_ids: [paper_macro, sp_market, crsp_market, rates]
+    source_note: Authors' calculations benchmarked to Lettau and Ludvigson Table VI.
+  table_ii_updated:
+    kind: table
+    number: 4
+    title: "Updated Summary Statistics: Historical Comparison"
+    label: tab:updated_summary
+    section: updated_evidence
+    role: updated_summary
+    paths: {tex: tables/table_ii_updated.tex, csv: tables/table_ii_updated.csv}
+    sample_rule: historical_and_latest_common
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [bea_nipa, federal_reserve_z1, shiller_data, crsp_data, fred]
+    source_ids: [core_macro, sp_market, crsp_market, rates]
+    source_note: Updated calculations from BEA, Federal Reserve, Shiller, CRSP, and FRED inputs.
+  table_iii_updated:
+    kind: table
+    number: 5
+    title: "Updated One-Quarter CAY Forecasts: Historical Comparison"
+    label: tab:updated_one_quarter
+    section: updated_evidence
+    role: updated_short_horizon
+    paths: {tex: tables/table_iii_updated.tex, csv: tables/table_iii_updated.csv}
+    sample_rule: selected_models_latest_common
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [bea_nipa, federal_reserve_z1, shiller_data, crsp_data, fred]
+    source_ids: [core_macro, sp_market, crsp_market, rates]
+    source_note: Updated calculations using the same historical specification.
+  table_vi_updated:
+    kind: table
+    number: 6
+    title: "Updated Long-Horizon CAY Forecasts: Historical Comparison"
+    label: tab:updated_long_horizon
+    section: updated_evidence
+    role: updated_long_horizon
+    paths: {tex: tables/table_vi_updated.tex, csv: tables/table_vi_updated.csv}
+    sample_rule: horizon_specific_latest_common
+    benchmark_citations: [lettau_ludvigson_2001, newey_west_1987]
+    provider_citations: [bea_nipa, federal_reserve_z1, shiller_data, crsp_data, fred]
+    source_ids: [core_macro, sp_market, crsp_market, rates]
+    source_note: Updated calculations using BEA, Federal Reserve, Shiller, CRSP, and FRED inputs.
+  table_s1_core_data_summary:
+    kind: table
+    number: 7
+    title: Core Data Coverage and Diagnostics
+    label: tab:data_diagnostics
+    section: data_diagnostics
+    role: data_coverage
+    paths: {tex: tables/table_s1_core_data_summary.tex, csv: tables/table_s1_core_data_summary.csv}
+    sample_rule: variable_specific
+    benchmark_citations: []
+    provider_citations: [bea_nipa, federal_reserve_z1, shiller_data, crsp_data, fred]
+    source_ids: [core_macro, sp_market, crsp_market, rates, recessions]
+    source_note: Coverage and transformations for the normalized core panel.
+  table_r1_replication_audit:
+    kind: table
+    number: 8
+    title: Historical Replication Audit
+    label: tab:replication_audit
+    section: reproducibility
+    role: audit
+    paths: {tex: tables/table_r1_replication_audit.tex, csv: tables/table_r1_replication_audit.csv}
+    sample_rule: historical_targets
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: []
+    source_ids: [paper_macro, posted_cay]
+    source_note: Fixed targets and generated audit values for Tables II, III, and VI.
+  table_ii_extension_cay_r:
+    kind: table
+    number: 9
+    title: Regional-Proxy CAY Summary Statistics
+    label: tab:regional_summary
+    section: extension
+    role: regional_summary
+    paths: {tex: paper/generated/tables/table_ii_extension_cay_r.tex, csv: paper/generated/tables/table_ii_extension_cay_r.csv}
+    sample_rule: regional_latest_common
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [federal_reserve_z1, fred]
+    source_ids: [z1_s1m_b, fred]
+    source_note: Regional proxy calculations from Federal Reserve Z.1 and FRED state shares.
+  table_iii_extension_cay_r:
+    kind: table
+    number: 10
+    title: Regional-Proxy One-Quarter Return Forecasts
+    label: tab:regional_one_quarter
+    section: extension
+    role: regional_short_horizon
+    paths: {tex: paper/generated/tables/table_iii_extension_cay_r.tex, csv: paper/generated/tables/table_iii_extension_cay_r.csv}
+    sample_rule: regional_latest_common
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [federal_reserve_z1, fred, crsp_data]
+    source_ids: [z1_s1m_b, fred, crsp_market]
+    source_note: Regional proxy specification following Lettau and Ludvigson Table III.
+  table_vi_extension_cay_r:
+    kind: table
+    number: 11
+    title: Regional-Proxy Long-Horizon Forecasts
+    label: tab:regional_long_horizon
+    section: extension
+    role: regional_long_horizon
+    paths: {tex: paper/generated/tables/table_vi_extension_cay_r.tex, csv: paper/generated/tables/table_vi_extension_cay_r.csv}
+    sample_rule: regional_horizon_specific
+    benchmark_citations: [lettau_ludvigson_2001, newey_west_1987]
+    provider_citations: [federal_reserve_z1, fred, crsp_data]
+    source_ids: [z1_s1m_b, fred, crsp_market]
+    source_note: Regional proxy specification following Lettau and Ludvigson Table VI.
+  figure_1_replication:
+    kind: figure
+    number: 1
+    title: Historical CAY and Excess Returns
+    label: fig:historical_cay_returns
+    section: historical_replication
+    role: historical_figure
+    paths: {tex: figures/figure_1_replication.tex, pdf: figures/figure_1_replication.pdf, png: figures/figure_1_replication.png}
+    sample_rule: historical
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [shiller_data, crsp_data]
+    source_ids: [paper_macro, sp_market, crsp_market]
+    source_note: Authors' calculations benchmarked to Lettau and Ludvigson Figure 1.
+  figure_1_updated:
+    kind: figure
+    number: 2
+    title: Updated CAY and Excess Returns
+    label: fig:updated_cay_returns
+    section: updated_evidence
+    role: updated_figure
+    paths: {tex: figures/figure_1_updated.tex, pdf: figures/figure_1_updated.pdf, png: figures/figure_1_updated.png}
+    sample_rule: latest_common
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [bea_nipa, federal_reserve_z1, shiller_data, crsp_data]
+    source_ids: [core_macro, sp_market, crsp_market]
+    source_note: Updated calculations from the normalized core panel.
+  figure_s1_data_anatomy:
+    kind: figure
+    number: 3
+    title: "Consumption, Income, and Wealth: Levels and Growth"
+    label: fig:data_anatomy
+    section: data_diagnostics
+    role: data_anatomy
+    paths: {tex: figures/figure_s1_data_anatomy.tex, pdf: figures/figure_s1_data_anatomy.pdf, png: figures/figure_s1_data_anatomy.png}
+    sample_rule: latest_common
+    benchmark_citations: []
+    provider_citations: [bea_nipa, federal_reserve_z1, fred]
+    source_ids: [core_macro, recessions]
+    source_note: Authors' diagnostics from normalized macroeconomic inputs.
+  figure_1_extension_cay_r:
+    kind: figure
+    number: 4
+    title: Regional-Proxy CAY and Excess Returns
+    label: fig:regional_cay_returns
+    section: extension
+    role: regional_figure
+    paths: {tex: paper/generated/figures/figure_1_extension_cay_r.tex, pdf: paper/generated/figures/figure_1_extension_cay_r.pdf, png: paper/generated/figures/figure_1_extension_cay_r.png}
+    sample_rule: regional_latest_common
+    benchmark_citations: [lettau_ludvigson_2001]
+    provider_citations: [federal_reserve_z1, fred, crsp_data]
+    source_ids: [z1_s1m_b, fred, crsp_market]
+    source_note: Regional proxy calculation following Lettau and Ludvigson Figure 1.
+  section9_bottom50:
+    kind: figure
+    number: 5
+    title: 'Bottom 50%: Two-Quarter QQQ Forecast Diagnostics'
+    label: fig:section9_bottom50
+    section: product
+    role: section9_segment
+    paths: {pdf: ../_output/extension/section9/chartbook_subcay_predictivity.pdf}
+    sample_rule: section9_manifest
+    benchmark_citations: []
+    provider_citations: [federal_reserve_z1]
+    source_ids: [dfa_zip, qqq_market]
+    source_note: Bottom-50 wealth-group diagnostics using DFA wealth and pinned QQQ adjusted-close prices.
+  section9_middle40:
+    kind: figure
+    number: 6
+    title: 'Middle 40%: Two-Quarter QQQ Forecast Diagnostics'
+    label: fig:section9_middle40
+    section: product
+    role: section9_segment
+    paths: {pdf: ../_output/extension/section9/chartbook_subcay_predictivity.pdf}
+    sample_rule: section9_manifest
+    benchmark_citations: []
+    provider_citations: [federal_reserve_z1]
+    source_ids: [dfa_zip, qqq_market]
+    source_note: Middle-40 wealth-group diagnostics using DFA wealth and pinned QQQ adjusted-close prices.
+  section9_top10:
+    kind: figure
+    number: 7
+    title: 'Top 10%: Two-Quarter QQQ Forecast Diagnostics'
+    label: fig:section9_top10
+    section: product
+    role: section9_segment
+    paths: {pdf: ../_output/extension/section9/chartbook_subcay_predictivity.pdf}
+    sample_rule: section9_manifest
+    benchmark_citations: []
+    provider_citations: [federal_reserve_z1]
+    source_ids: [dfa_zip, qqq_market]
+    source_note: Top-10 wealth-group diagnostics using DFA wealth and pinned QQQ adjusted-close prices.
 generated_inputs_to_latex:
-- paper/generated/report_metadata.tex
-- paper/generated/replication_status.tex
-- paper/generated/generated_captions.tex
-generated_tables:
-- id: table_ii_replication
-  tex: tables/table_ii_replication.tex
-  csv: tables/table_ii_replication.csv
-  sample: historical
-- id: table_ii_updated
-  tex: tables/table_ii_updated.tex
-  csv: tables/table_ii_updated.csv
-  sample: updated
-- id: table_iii_replication
-  tex: tables/table_iii_replication.tex
-  csv: tables/table_iii_replication.csv
-  sample: historical
-- id: table_iii_updated
-  tex: tables/table_iii_updated.tex
-  csv: tables/table_iii_updated.csv
-  sample: updated
-- id: table_vi_replication
-  tex: tables/table_vi_replication.tex
-  csv: tables/table_vi_replication.csv
-  sample: historical
-- id: table_vi_updated
-  tex: tables/table_vi_updated.tex
-  csv: tables/table_vi_updated.csv
-  sample: updated
-- id: table_s1_core_data_summary
-  tex: tables/table_s1_core_data_summary.tex
-  csv: tables/table_s1_core_data_summary.csv
-  sample: historical_and_updated
-- id: table_r1_replication_audit
-  tex: tables/table_r1_replication_audit.tex
-  csv: tables/table_r1_replication_audit.csv
-  sample: historical
-generated_figures:
-- id: figure_1_replication
-  pdf: figures/figure_1_replication.pdf
-  png: figures/figure_1_replication.png
-  tex: figures/figure_1_replication.tex
-  sample: historical
-- id: figure_1_updated
-  pdf: figures/figure_1_updated.pdf
-  png: figures/figure_1_updated.png
-  tex: figures/figure_1_updated.tex
-  sample: updated
-- id: figure_s1_data_anatomy
-  pdf: figures/figure_s1_data_anatomy.pdf
-  png: figures/figure_s1_data_anatomy.png
-  tex: figures/figure_s1_data_anatomy.tex
-  sample: historical_and_updated
-caption_requirements:
-  require_title: true
-  require_label: true
-  require_sample_dates: true
-  require_data_vintage: true
-  require_takeaway: true
-  require_source_or_source_note: true
-forbidden_manual_content:
-- Regression coefficients typed directly into section prose when a generated macro is available
-- Updated sample endpoints hardcoded in section files
-- Tables whose numeric body is manually typed rather than generated
-- Claims that an updated relation strengthened or weakened without generated evidence
-- Code snippets in the LaTeX report
+  - paper/generated/report_metadata.tex
+  - paper/generated/replication_status.tex
+  - paper/generated/generated_captions.tex
+  - paper/generated/empirical_findings.tex
+  - paper/generated/appendix_tables.tex
 build_outputs:
-- build/main.pdf
-- build/report_metadata.json
-- build/artifact_manifest.json
-- build/replication_status.txt
-- build/latex_build.log
+  - build/main.pdf
+  - build/report_metadata.json
+  - build/artifact_manifest.json
+  - build/replication_status.txt
+  - build/latex_build.log

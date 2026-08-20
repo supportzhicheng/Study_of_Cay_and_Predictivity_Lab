@@ -18,9 +18,18 @@ def write_artifact_manifest(
     schema_path: Path,
     *,
     git_commit: str,
+    source_ids: Mapping[str, Sequence[str]] | None = None,
 ) -> Path:
     """Hash artifacts and reject missing or stale source dependencies."""
     entries = []
+    project_root = output_path.resolve().parents[2]
+
+    def relative(path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(project_root))
+        except ValueError:
+            return str(path.resolve())
+
     for artifact_id, path in artifacts.items():
         if not path.exists():
             raise FileNotFoundError(f"Missing generated artifact: {path}")
@@ -40,10 +49,11 @@ def write_artifact_manifest(
         entries.append(
             {
                 "id": artifact_id,
-                "path": str(path),
+                "path": relative(path),
                 "sha256": sha256_file(path),
+                "source_ids": list((source_ids or {}).get(artifact_id, ())),
                 "source_dependencies": [
-                    str(dependency) for dependency in source_dependencies
+                    relative(dependency) for dependency in source_dependencies
                 ],
             }
         )

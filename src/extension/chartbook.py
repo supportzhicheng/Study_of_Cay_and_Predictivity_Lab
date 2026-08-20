@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -382,3 +384,62 @@ def build_chartbook(
         end=end,
         risky_tickers=risky_ticker_list or None,
     )
+
+
+def write_section9_manifest(
+    output_dir: Path,
+    market_cache: Path,
+    generated_tex: Path,
+) -> tuple[Path, Path]:
+    """Map chartbook pages to Section 9 segments and write labeled wrappers."""
+    prepared = pd.read_csv(output_dir / "subcay_predictivity_prepared.csv")
+    rolling = pd.read_csv(output_dir / "subcay_predictivity_rolling.csv")
+    segments = sorted(prepared["segment"].unique())
+    labels = {
+        "bottom50": "fig:section9_bottom50",
+        "middle40": "fig:section9_middle40",
+        "top10": "fig:section9_top10",
+    }
+    titles = {
+        "bottom50": "Bottom 50\\%: Two-Quarter QQQ Forecast Diagnostics",
+        "middle40": "Middle 40\\%: Two-Quarter QQQ Forecast Diagnostics",
+        "top10": "Top 10\\%: Two-Quarter QQQ Forecast Diagnostics",
+    }
+    source_hash = hashlib.sha256(market_cache.read_bytes()).hexdigest()
+    entries = []
+    tex = []
+    for page, segment in enumerate(segments, start=2):
+        segment_rows = prepared.loc[prepared["segment"] == segment]
+        rolling_rows = rolling.loc[rolling["segment"] == segment]
+        entry = {
+            "segment": segment,
+            "page": page,
+            "label": labels[segment],
+            "sample_start": str(segment_rows["quarter"].min()),
+            "sample_end": str(segment_rows["quarter"].max()),
+            "rolling_start": str(rolling_rows["quarter"].min()),
+            "rolling_end": str(rolling_rows["quarter"].max()),
+            "target": "two-quarter QQQ log return",
+            "source_sha256": source_hash,
+        }
+        entries.append(entry)
+        tex.extend(
+            [
+                r"\begin{figure}[htbp]",
+                r"\centering",
+                rf"\includegraphics[page={page},width=\linewidth]{{../../_output/extension/section9/chartbook_subcay_predictivity.pdf}}",
+                rf"\caption{{{titles[segment]}. Sample: {entry['sample_start']}--{entry['sample_end']}. Source: Federal Reserve DFA wealth-group detail and pinned QQQ adjusted-close cache ({source_hash[:12]}...).}}",
+                rf"\label{{{labels[segment]}}}",
+                r"\end{figure}",
+                r"\FloatBarrier",
+                "",
+            ]
+        )
+    manifest_path = output_dir / "section9_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"figures": entries}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    generated_tex.parent.mkdir(parents=True, exist_ok=True)
+    generated_tex.write_text("\n".join(tex), encoding="utf-8")
+    return manifest_path, generated_tex
