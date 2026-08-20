@@ -78,11 +78,11 @@ def test_bootstrap_runs_steps_sequentially_and_logs_progress(
     bootstrap.bootstrap_real_data(_settings(tmp_path))
 
     expected = [
-        "author data",
         "FRED data",
         "BEA data",
         "Shiller data",
         "WRDS data",
+        "author data",
         "source normalization",
         "panel build",
         "exhibit generation",
@@ -133,7 +133,7 @@ def test_bootstrap_stops_after_acquisition_failure(monkeypatch, tmp_path, caplog
     with pytest.raises(RuntimeError, match="FRED unavailable"):
         bootstrap.bootstrap_real_data(_settings(tmp_path))
 
-    assert calls == ["author data", "FRED data"]
+    assert calls == ["FRED data"]
     assert any(
         record.getMessage().startswith("Failed FRED data after ")
         for record in caplog.records

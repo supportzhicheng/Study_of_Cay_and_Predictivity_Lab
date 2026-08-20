@@ -8,13 +8,17 @@ from pathlib import Path
 
 import yaml
 
-from src.bootstrap_real_data import bootstrap_real_data
+from src.bootstrap_real_data import (
+    CORE_RAW_FILES,
+    acquire_core_data,
+    bootstrap_real_data,
+)
 from src.data.build_extension_s14 import build_s14_components
 from src.data.build_extension_sources import (
     build_regional_proxy_dataset,
     build_wealth_group_dataset,
 )
-from src.data.build_sources import RAW_FILES, normalize_pulled_sources
+from src.data.build_sources import normalize_pulled_sources
 from src.data.extension_acquisition import (
     acquire_extension_sources,
     extension_sources_current,
@@ -42,6 +46,7 @@ PANEL_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.parquet"
 PANEL_METADATA_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.metadata.json"
 MANIFEST_PATH = SETTINGS.reports_dir / "build" / "artifact_manifest.json"
 BOOTSTRAP_MARKER = SETTINGS.output_dir / "bootstrap_real_data.complete"
+CORE_ACQUIRE_MARKER = SETTINGS.output_dir / "core_acquire.complete"
 TARGETS_PATH = SETTINGS.project_root / "config" / "paper_targets.yml"
 EXTENSION_REGION_SOURCE_CSV = (
     SETTINGS.extension_data_dir / "cay_components_region_ca_il_tx_q_proxy.csv"
@@ -88,6 +93,10 @@ EXTENSION_FRED_IDS = (
     "CAPOP",
     "ILPOP",
     "TXPOP",
+)
+CORE_PREPARE_SOURCE_IDS = required_panel_sources()
+CORE_LIVE_SOURCE_IDS = tuple(
+    source_id for source_id in CORE_PREPARE_SOURCE_IDS if source_id != "paper_macro"
 )
 
 REPORT_CONTRACT = yaml.safe_load(
@@ -159,91 +168,89 @@ def task_config():
     }
 
 
-def task_pull_author_data():
-    """Download and normalize pinned author validation files."""
-
-    def pull_author_data():
-        ensure_author_data(SETTINGS.data_dir / "normalized", vintage=SETTINGS.end_date)
-
-    targets = [
-        str(SETTINGS.data_dir / "normalized" / f"{filename}.{suffix}")
-        for filename in ("paper_macro_quarterly", "posted_cay_quarterly")
-        for suffix in ("parquet", "metadata.json")
-    ]
+def _local_core_sources() -> dict[str, list[Path]]:
     return {
-        "actions": [pull_author_data],
+        source_id: list(
+            SETTINGS.p10_input_dir.glob(f"{SOURCE_REGISTRY[source_id].filename_stem}.*")
+        )
+        for source_id in CORE_LIVE_SOURCE_IDS
+    }
+
+
+def _acquire_core() -> None:
+    local_sources = _local_core_sources()
+    if not all(local_sources.values()):
+        acquire_core_data(SETTINGS)
+        mode = "live raw acquisition"
+    else:
+        mode = "verified local normalized bundle"
+    CORE_ACQUIRE_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    CORE_ACQUIRE_MARKER.write_text(f"completed via {mode}\n", encoding="utf-8")
+
+
+def _core_acquisition_current() -> bool:
+    local_complete = all(_local_core_sources().values())
+    raw_complete = all(
+        (SETTINGS.data_dir / "raw" / relative).exists() for relative in CORE_RAW_FILES
+    )
+    return CORE_ACQUIRE_MARKER.exists() and (local_complete or raw_complete)
+
+
+def task_core_acquire():
+    """Acquire live core caches or resolve a complete local normalized bundle."""
+    return {
+        "actions": [_acquire_core],
+        "file_dep": [
+            str(path) for paths in _local_core_sources().values() for path in paths
+        ],
+        "targets": [str(CORE_ACQUIRE_MARKER)],
         "task_dep": ["config"],
-        "targets": targets,
-        "uptodate": [lambda: all(Path(target).exists() for target in targets)],
+        "uptodate": [_core_acquisition_current],
     }
 
 
-def task_import_sources():
-    """Validate normalized local source substitutes."""
-
-    available = {
-        source_id: candidates
-        for source_id, spec in SOURCE_REGISTRY.items()
-        if (candidates := list(SETTINGS.p10_input_dir.glob(f"{spec.filename_stem}.*")))
-    }
-
-    def import_available_sources():
-        for source_id in available:
+def _prepare_core() -> None:
+    normalized_dir = SETTINGS.data_dir / "normalized"
+    ensure_author_data(normalized_dir, vintage=SETTINGS.end_date)
+    for source_id, candidates in _local_core_sources().items():
+        if candidates:
             import_local_source(
                 source_id,
                 SETTINGS.p10_input_dir,
-                SETTINGS.data_dir / "normalized",
+                normalized_dir,
                 vintage=SETTINGS.end_date,
             )
-
-    return {
-        "actions": [import_available_sources],
-        "file_dep": [str(path) for paths in available.values() for path in paths],
-        "targets": [
-            str(
-                SETTINGS.data_dir
-                / "normalized"
-                / f"{SOURCE_REGISTRY[source_id].filename_stem}.{suffix}"
-            )
-            for source_id in available
-            for suffix in ("parquet", "metadata.json")
-        ],
-        "task_dep": ["config"],
-        "uptodate": [not available],
-    }
-
-
-def task_normalize_pulled_sources():
-    """Transform standard live-pull caches into quarterly contracts."""
-
-    def normalize_sources():
+    missing = [
+        source_id
+        for source_id in CORE_PREPARE_SOURCE_IDS
+        if not (
+            normalized_dir / f"{SOURCE_REGISTRY[source_id].filename_stem}.parquet"
+        ).exists()
+    ]
+    if missing:
         normalize_pulled_sources(
             SETTINGS.data_dir / "raw",
-            SETTINGS.data_dir / "normalized",
+            normalized_dir,
             vintage=SETTINGS.end_date,
         )
 
+
+def task_core_prepare():
+    """Import or normalize all source contracts required by the core panel."""
+    targets = [
+        str(
+            SETTINGS.data_dir
+            / "normalized"
+            / f"{SOURCE_REGISTRY[source_id].filename_stem}.{suffix}"
+        )
+        for source_id in (*CORE_PREPARE_SOURCE_IDS, "posted_cay")
+        for suffix in ("parquet", "metadata.json")
+    ]
     return {
-        "actions": [normalize_sources],
-        "file_dep": [
-            str(SETTINGS.data_dir / "raw" / relative) for relative in RAW_FILES.values()
-        ],
-        "targets": [
-            str(
-                SETTINGS.data_dir
-                / "normalized"
-                / f"{SOURCE_REGISTRY[source_id].filename_stem}.{suffix}"
-            )
-            for source_id in (
-                "core_macro",
-                "sp_market",
-                "crsp_market",
-                "rates",
-                "recessions",
-            )
-            for suffix in ("parquet", "metadata.json")
-        ],
-        "task_dep": ["config"],
+        "actions": [_prepare_core],
+        "targets": targets,
+        "task_dep": ["core_acquire"],
+        "uptodate": [lambda: all(Path(target).exists() for target in targets)],
     }
 
 
@@ -264,11 +271,7 @@ def task_build_panel():
             for source_id in required_panel_sources()
         ],
         "targets": [str(PANEL_PATH), str(PANEL_METADATA_PATH)],
-        "task_dep": [
-            "pull_author_data",
-            "import_sources",
-            "normalize_pulled_sources",
-        ],
+        "task_dep": ["core_prepare"],
     }
 
 
@@ -439,7 +442,6 @@ def task_extension_prepare():
             str(SETTINGS.extension_raw_dir / "dfa.zip"),
         ],
         "targets": [
-            str(SETTINGS.extension_normalized_dir / "cay_components_households_q.csv"),
             str(SETTINGS.extension_normalized_dir / "cay_components_hnpo_q.csv"),
             str(
                 SETTINGS.extension_normalized_dir / "cay_components_wealth_groups_q.csv"

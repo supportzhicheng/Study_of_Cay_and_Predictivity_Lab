@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import shutil
+import urllib.request
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +20,10 @@ from src.data.build_extension_sources import (
     _fetch_fred_series,
 )
 from src.settings import Settings
+
+Z1_CSV_PACKAGE_URL = (
+    "https://www.federalreserve.gov/releases/z1/current/z1_csv_files.zip"
+)
 
 
 def sha256(path: Path) -> str:
@@ -77,6 +84,23 @@ def _acquire_latest_qqq(path: Path) -> None:
     output.to_csv(path, index=False)
 
 
+def _acquire_latest_z1(raw_dir: Path) -> None:
+    destinations = {
+        "csv/S14_b.csv": raw_dir / "FRB_Z1_S14_b_Q.csv",
+        "csv/S1M_b.csv": raw_dir / "FRB_Z1_S1M_b_Q.csv",
+    }
+    if all(path.exists() for path in destinations.values()):
+        return
+    request = urllib.request.Request(
+        Z1_CSV_PACKAGE_URL, headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(request, timeout=120) as response:
+        archive = zipfile.ZipFile(io.BytesIO(response.read()))
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    for member, destination in destinations.items():
+        destination.write_bytes(archive.read(member))
+
+
 def acquire_extension_sources(settings: Settings) -> list[Path]:
     """Populate declared raw caches for baseline or latest acquisition mode."""
     mode = settings.extension_acquisition_mode
@@ -85,6 +109,7 @@ def acquire_extension_sources(settings: Settings) -> list[Path]:
     _copy_available_bundle(settings)
 
     if mode == "latest":
+        _acquire_latest_z1(settings.extension_raw_dir)
         _ensure_dfa_detail_csv(settings.extension_raw_dir, allow_network=True)
         for series_id in {
             *FRED_HPI_IDS.values(),

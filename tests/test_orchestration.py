@@ -9,15 +9,7 @@ import dodo
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_pull_author_action_returns_valid_doit_result(monkeypatch):
-    monkeypatch.setattr(dodo, "ensure_author_data", lambda *args, **kwargs: (1, 2))
-    action = dodo.task_pull_author_data()["actions"][0]
-
-    assert action() is None
-
-
 def test_pipeline_actions_discard_library_return_values(monkeypatch):
-    monkeypatch.setattr(dodo, "normalize_pulled_sources", lambda *args, **kwargs: {})
     monkeypatch.setattr(dodo, "build_panel", lambda *args, **kwargs: dodo.PANEL_PATH)
     monkeypatch.setattr(dodo, "generate_exhibits", lambda *args, **kwargs: [])
     monkeypatch.setattr(
@@ -25,7 +17,6 @@ def test_pipeline_actions_discard_library_return_values(monkeypatch):
     )
 
     for task_factory in (
-        dodo.task_normalize_pulled_sources,
         dodo.task_build_panel,
         dodo.task_generate_exhibits,
         dodo.task_compile_report,
@@ -72,9 +63,8 @@ def test_doit_lists_required_core_tasks():
 
     for task in (
         "config",
-        "pull_author_data",
-        "import_sources",
-        "normalize_pulled_sources",
+        "core_acquire",
+        "core_prepare",
         "build_panel",
         "generate_exhibits",
         "run_notebook",
@@ -92,6 +82,8 @@ def test_doit_lists_required_core_tasks():
 
 def test_doit_targets_have_one_owner_and_required_edges():
     tasks = {
+        "core_acquire": dodo.task_core_acquire(),
+        "core_prepare": dodo.task_core_prepare(),
         "build_panel": dodo.task_build_panel(),
         "generate_exhibits": dodo.task_generate_exhibits(),
         "run_notebook": dodo.task_run_notebook(),
@@ -108,7 +100,8 @@ def test_doit_targets_have_one_owner_and_required_edges():
             owners[target] = task_name
 
     assert len(tasks["build_panel"]["targets"]) == 2
-    assert "normalize_pulled_sources" in tasks["build_panel"]["task_dep"]
+    assert tasks["core_prepare"]["task_dep"] == ["core_acquire"]
+    assert tasks["build_panel"]["task_dep"] == ["core_prepare"]
     assert set(tasks["generate_exhibits"]["targets"]) == {
         str(path) for path in (*dodo.GENERATED_ARTIFACTS, dodo.MANIFEST_PATH)
     }
@@ -138,3 +131,48 @@ def test_doit_targets_have_one_owner_and_required_edges():
     assert {str(path) for path in dodo.REPORT_SOURCES} <= report_dependencies
     assert {str(path) for path in dodo.GENERATED_ARTIFACTS} <= report_dependencies
     assert tasks["bootstrap_real_data"]["targets"] == [str(dodo.BOOTSTRAP_MARKER)]
+
+
+def test_core_acquire_uses_complete_local_bundle_without_live_pull(
+    monkeypatch, tmp_path
+):
+    marker = tmp_path / "core.complete"
+    monkeypatch.setattr(dodo, "CORE_ACQUIRE_MARKER", marker)
+    monkeypatch.setattr(
+        dodo,
+        "_local_core_sources",
+        lambda: {
+            source_id: [tmp_path / f"{source_id}.parquet"]
+            for source_id in dodo.CORE_LIVE_SOURCE_IDS
+        },
+    )
+    monkeypatch.setattr(
+        dodo,
+        "acquire_core_data",
+        lambda settings: (_ for _ in ()).throw(AssertionError("live pull called")),
+    )
+
+    dodo._acquire_core()
+
+    assert marker.read_text(encoding="utf-8") == (
+        "completed via verified local normalized bundle\n"
+    )
+
+
+def test_core_acquire_freshness_requires_marker_and_complete_inputs(
+    monkeypatch, tmp_path
+):
+    marker = tmp_path / "core.complete"
+    monkeypatch.setattr(dodo, "CORE_ACQUIRE_MARKER", marker)
+    monkeypatch.setattr(
+        dodo,
+        "_local_core_sources",
+        lambda: {
+            source_id: [tmp_path / f"{source_id}.parquet"]
+            for source_id in dodo.CORE_LIVE_SOURCE_IDS
+        },
+    )
+
+    assert not dodo._core_acquisition_current()
+    marker.touch()
+    assert dodo._core_acquisition_current()

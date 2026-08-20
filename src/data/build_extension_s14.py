@@ -23,7 +23,7 @@ HNPO_MMF_CODE = "FL153034005.Q"
 
 def _to_float(value: str) -> float | None:
     value = value.strip()
-    if value == "":
+    if value in {"", "ND", "NA"}:
         return None
     return float(value)
 
@@ -33,6 +33,14 @@ def _read_series(path: Path) -> tuple[list[str], dict[str, list[float | None]]]:
         rows = list(csv.reader(f))
 
     header = rows[0]
+    if header[0].strip().lower() == "date":
+        quarters = [row[0].replace(":", "") for row in rows[1:]]
+        series = {
+            series_code.strip(): [_to_float(row[index]) for row in rows[1:]]
+            for index, series_code in enumerate(header[1:], start=1)
+        }
+        return quarters, series
+
     quarters = header[6:]
     series: dict[str, list[float | None]] = {}
 
@@ -191,26 +199,26 @@ def build_s14_components(raw_dir: Path, normalized_dir: Path) -> list[Path]:
     metadata_path = normalized_dir / "series_metadata.csv"
 
     hh_quarters, hh_series = _read_series(raw_households_path)
-    _check_required(
-        hh_series,
-        [
-            HH_HOUSING_CODE,
-            HH_FINANCIAL_CODE,
-            HH_CHECKABLE_CODE,
-            HH_DEPOSITS_CODE,
-            HH_MMF_CODE,
-        ],
-    )
-    _write_components(
-        hh_quarters,
-        hh_series,
-        households_path,
+    household_codes = [
         HH_HOUSING_CODE,
         HH_FINANCIAL_CODE,
         HH_CHECKABLE_CODE,
         HH_DEPOSITS_CODE,
         HH_MMF_CODE,
-    )
+    ]
+    outputs = []
+    if all(code in hh_series for code in household_codes):
+        _write_components(
+            hh_quarters,
+            hh_series,
+            households_path,
+            HH_HOUSING_CODE,
+            HH_FINANCIAL_CODE,
+            HH_CHECKABLE_CODE,
+            HH_DEPOSITS_CODE,
+            HH_MMF_CODE,
+        )
+        outputs.append(households_path)
 
     hnpo_quarters, hnpo_series = _read_series(raw_hnpo_path)
     _check_required(
@@ -235,7 +243,7 @@ def build_s14_components(raw_dir: Path, normalized_dir: Path) -> list[Path]:
     )
 
     _write_metadata(metadata_path)
-    return [households_path, hnpo_path, metadata_path]
+    return [*outputs, hnpo_path, metadata_path]
 
 
 def main() -> None:

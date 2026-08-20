@@ -50,7 +50,11 @@ def _ensure_dfa_detail_csv(raw_dir: Path, *, allow_network: bool) -> Path:
     if not zip_path.exists() and not allow_network:
         raise FileNotFoundError(f"Missing pinned DFA archive: {zip_path}")
     if not zip_path.exists():
-        zip_path.write_bytes(urllib.request.urlopen(DFA_ZIP_URL, timeout=60).read())
+        request = urllib.request.Request(
+            DFA_ZIP_URL, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            zip_path.write_bytes(response.read())
     if not detail_path.exists():
         with zipfile.ZipFile(zip_path) as zf:
             zf.extract("dfa-networth-levels-detail.csv", raw_dir)
