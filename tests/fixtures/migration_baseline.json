@@ -1,34 +1,66 @@
 {
   "core": {
     "python_version": "3.11",
-    "pytest_collected": 137,
-    "pytest_passed": 136,
+    "pytest_collected": 161,
+    "pytest_passed": 161,
     "pytest_failed": 0,
-    "pytest_blocked": 1,
-    "processed_panel_sha256": "0d6643bd2eea7b47f61c8dcd74f4374cc9d1025a5b8fa5f07a1c95f5d4abe485",
+    "pytest_blocked": 0,
+    "processed_panel_sha256": "f625964a6492c73c0ae31d76f71692823259fec3f930d9364103a9610cf77e2e",
     "generated_table_files": 16,
     "generated_figure_files": 9,
-    "pre_pdf_artifacts": 32
+    "pre_pdf_artifacts": 32,
+    "audit_rows": 39,
+    "audit_status_counts": {
+      "PASS_STRICT": 25,
+      "PASS_REVISED_VINTAGE": 11,
+      "FAIL_REQUIRES_DIAGNOSIS": 3
+    },
+    "audit_csv_sha256": "ed719f906f9ace349692bd6ac0376928773b9528c8c011bac7aa036244982047",
+    "report_pages": 22,
+    "report_pdf_sha256": "1127e38cadf8e4eb1659ebf6ab8caf1cf5c181674fee4c8a0b45db74d89610f5"
   },
-  "extension": {
-    "prepared_rows": 417,
-    "prepared_range": "1991Q2-2025Q4",
-    "rolling_rows": 297,
-    "rolling_range": "2001Q2-2025Q4",
+  "regional": {
+    "prepared_rows": 414,
+    "prepared_range": "1991Q2-2025Q3",
+    "rolling_rows": 294,
+    "rolling_range": "2001Q2-2025Q3",
+    "segments": [
+      "California",
+      "Illinois",
+      "Texas"
+    ],
+    "status_counts": {
+      "ACTIVE": 207,
+      "WEAKENED": 46,
+      "LOST": 41
+    },
+    "prepared_csv_sha256": "628aa0fc06e7daa9fd20560343dcd824390d66be8f4f611c55a7acf79b586c48",
+    "rolling_csv_sha256": "802f7baec074b2f0ebdb9d1459d5824234970f76472f078eb1d3253433aa1bae",
+    "chartbook_pages": 4,
+    "report_figure_pages": 1,
+    "report_table_ii_sha256": "d4aa4e3d9ee6cef43584f2362296341cda3ad07da7fc57e787d6e22458d4df9d",
+    "report_table_iii_sha256": "5fdbe045d2739ea2c474352158e8d8bd75827fa16147e191d95a2d74ee8536c4",
+    "report_table_vi_sha256": "b6a807a01e10f74e51dfc368f28267743afe2707bd183a831908e22f5317d58a"
+  },
+  "section9": {
+    "prepared_rows": 30,
+    "prepared_range": "2023Q2-2025Q3",
+    "rolling_rows": 6,
+    "rolling_range": "2025Q2-2025Q3",
     "segments": [
       "bottom50",
       "middle40",
       "top10"
     ],
     "status_counts": {
-      "ACTIVE": 194,
-      "WEAKENED": 57,
-      "LOST": 46
+      "ACTIVE": 6
     },
-    "mean_absolute_error": 0.02233142675849002,
-    "prepared_csv_sha256": "73644f47d9eb23d256a1400f1bf6bcafed9b2f4ff6bd7ae75160623927eb3568",
-    "rolling_csv_sha256": "db855e9510cda1955b56a14673d5c0c47cc60fd904060b556d077461a8ec7731",
-    "chartbook_pages": 4,
-    "focused_extension_pytest_cases": 29
+    "prepared_csv_sha256": "e83e66a794ee34d8cb0709dcc6cc66719734c12fae2e90f8e74ba212561ba61d",
+    "rolling_csv_sha256": "7bc1dff59f855082093ca338c3d3b5748d78b1e44805492e02a4a930c751bbae",
+    "chartbook_pages": 4
+  },
+  "tracked_data": {
+    "cay_data_files": 29,
+    "cay_data_bytes": 1688055
   }
 }

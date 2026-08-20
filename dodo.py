@@ -4,9 +4,21 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from shutil import copy2
 from pathlib import Path
+from shutil import copy2
 
+from cay_lab.dodo import build_chartbook
+from cay_lab.pipeline import (
+    PANEL_STEM as EXTENSION_PANEL_STEM,
+)
+from cay_lab.pipeline import (
+    REGION_NORMALIZED_STEM,
+    build_extension_panel,
+    generate_combined_report,
+    generate_extension_exhibits,
+    import_region_data,
+)
+from cay_lab.settings import load_extension_settings
 from src.bootstrap_real_data import bootstrap_real_data
 from src.data.build_sources import normalize_pulled_sources
 from src.data.import_local import import_local_source
@@ -15,17 +27,6 @@ from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
 from src.pipeline import build_panel, generate_exhibits
 from src.reporting.latex import compile_latex_report
 from src.settings import load_settings
-
-from cay_lab.dodo import build_chartbook
-from cay_lab.pipeline import (
-    PANEL_STEM as EXTENSION_PANEL_STEM,
-    REGION_NORMALIZED_STEM,
-    build_extension_panel,
-    generate_combined_report,
-    generate_extension_exhibits,
-    import_region_data,
-)
-from cay_lab.settings import load_extension_settings
 
 SETTINGS = load_settings([])
 EXTENSION_SETTINGS = load_extension_settings()
@@ -43,7 +44,9 @@ EXTENSION_REGION_NORMALIZED_PARQUET = (
 EXTENSION_REGION_NORMALIZED_META = (
     EXTENSION_SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
 )
-EXTENSION_PANEL_PARQUET = EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.parquet"
+EXTENSION_PANEL_PARQUET = (
+    EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.parquet"
+)
 EXTENSION_PANEL_META = (
     EXTENSION_SETTINGS.output_dir / f"{EXTENSION_PANEL_STEM}.metadata.json"
 )
@@ -133,9 +136,7 @@ def task_pull_author_data():
     """Download and normalize pinned author validation files."""
 
     def pull_author_data():
-        ensure_author_data(
-            SETTINGS.data_dir / "normalized", vintage=SETTINGS.end_date
-        )
+        ensure_author_data(SETTINGS.data_dir / "normalized", vintage=SETTINGS.end_date)
 
     return {
         "actions": [pull_author_data],

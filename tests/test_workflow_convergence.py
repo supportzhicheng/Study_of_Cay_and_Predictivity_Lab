@@ -38,7 +38,7 @@ def test_migration_baseline_fixture_matches_documented_expectations():
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
 
     assert baseline["core"]["processed_panel_sha256"] == (
-        "0d6643bd2eea7b47f61c8dcd74f4374cc9d1025a5b8fa5f07a1c95f5d4abe485"
+        "f625964a6492c73c0ae31d76f71692823259fec3f930d9364103a9610cf77e2e"
     )
     assert baseline["core"]["generated_table_files"] == 16
     assert baseline["core"]["generated_figure_files"] == 9
@@ -50,13 +50,29 @@ def test_migration_baseline_fixture_matches_documented_expectations():
         + baseline["core"]["pytest_blocked"]
         == baseline["core"]["pytest_collected"]
     )
-    assert baseline["extension"]["prepared_rows"] == 417
-    assert baseline["extension"]["rolling_rows"] == 297
-    assert baseline["extension"]["segments"] == ["bottom50", "middle40", "top10"]
-    assert baseline["extension"]["status_counts"] == {
-        "ACTIVE": 194,
-        "WEAKENED": 57,
-        "LOST": 46,
+    assert baseline["core"]["audit_status_counts"] == {
+        "PASS_STRICT": 25,
+        "PASS_REVISED_VINTAGE": 11,
+        "FAIL_REQUIRES_DIAGNOSIS": 3,
+    }
+    assert baseline["regional"]["prepared_rows"] == 414
+    assert baseline["regional"]["rolling_rows"] == 294
+    assert baseline["regional"]["segments"] == [
+        "California",
+        "Illinois",
+        "Texas",
+    ]
+    assert baseline["regional"]["status_counts"] == {
+        "ACTIVE": 207,
+        "WEAKENED": 46,
+        "LOST": 41,
+    }
+    assert baseline["section9"]["prepared_rows"] == 30
+    assert baseline["section9"]["rolling_rows"] == 6
+    assert baseline["section9"]["segments"] == ["bottom50", "middle40", "top10"]
+    assert baseline["tracked_data"] == {
+        "cay_data_files": 29,
+        "cay_data_bytes": 1688055,
     }
 
 
