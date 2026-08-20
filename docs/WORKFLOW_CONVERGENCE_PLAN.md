@@ -1,440 +1,568 @@
-# Packaged `cay_lab` Workflow Convergence Plan
+# Unified Workflow, Data, Replication, and Report Plan
 
-**Status:** Blocked implementation plan and single source of truth
+**Status:** Proposed implementation plan and sole source of truth
 
-This file supersedes all earlier convergence design and planning documents.
-Update this file rather than creating another convergence document.
+## 1. Goal and Decisions
 
-## Blocker: Pin Extension Sources First
+Build the full report through one root workflow, one code tree, and one ignored
+data root. Preserve the current empirical products while removing duplicate
+code, hidden inputs, checked-in data, and broken report rendering.
 
-Do not start the package migration until a clean checkout can reproduce the
-current extension results without reading tracked files from `cay_data/raw`.
+Decisions:
 
-Before Stage 1:
+1. Root `dodo.py` is the only workflow entry point.
+2. `src` is the project namespace. Move extension code to `src/extension`; do
+   not create an installable `cay_lab` library.
+3. Use `environment.yml` only. Remove `pyproject.toml` and editable-install
+   instructions.
+4. Store all raw, normalized, and processed data under `_data`; store generated
+   analysis under `_output` and report artifacts under `reports`.
+5. Keep source metadata, hashes, schemas, and synthetic fixtures in Git. Do not
+   track provider bytes or generated datasets.
+6. Keep empirical-method changes separate from structural moves.
+7. Do not change paper targets or widen tolerances.
 
-1. Add `config/extension_sources.yml` with source IDs, URLs or API queries,
-   release or vintage dates, units, coverage, SHA-256 hashes, and immutable
-   archive or import locations.
-2. Pin the exact June 2026 Z.1, DFA, and FRED inputs. Fail on a hash mismatch;
-   never substitute the latest release.
-3. From an empty temporary data root, acquire the pinned inputs and rebuild all
-   six extension datasets byte-for-byte.
-4. Reproduce the prepared and rolling result hashes in the Baselines section.
-5. Confirm all 438 regional rows still use `income_share_fallback`. Do not
-   enable the unused FDIC path.
+## 2. Verified Current State
 
-Current source gaps:
+- Root `dodo.py` has 16 tasks; `cay_lab/dodo.py` has 5 overlapping tasks and
+  also contains analysis and chartbook code.
+- Implementation is split across 37 Python files in `src`, 14 in `cay_lab`, and
+  two builders in `cay_data`.
+- Status classification, rolling predictivity, segment tests, and chartbook
+  rendering have duplicate implementations.
+- `pyproject.toml` points to a nonexistent `src/cay_lab` package.
+- `cay_data` contains 29 tracked files totaling 1,688,055 bytes and mixes raw
+  snapshots, generated datasets, metadata, and scripts.
+- Root `doit compile_report` works with existing caches, but `build_panel` does
+  not depend on `normalize_pulled_sources`; an empty `_data` build is incomplete.
+- The regional report reads both extension data and
+  `_data/processed/core_quarterly.parquet`. It currently degrades silently when
+  the core panel is missing.
+- Section 9 reads an undeclared QQQ cache or falls back to mutable Stooq/Yahoo
+  downloads.
+- Extension tests read real `cay_data` files instead of generated fixtures.
+- The latest full test record has 159 tests and two failures: a stale optional
+  WRDS-password fixture and a concurrency expectation not implemented by the
+  sequential bootstrap.
 
-| Source | Blocker |
-|---|---|
-| Z.1 S14.b and S1M.b | Local CSVs have no acquisition path |
-| DFA net-worth detail | `dfa.zip` points to a mutable latest release |
-| FRED HPI/PCPI/POP | Series are not pinned to an ALFRED vintage |
-| FDIC deposits | The unused helper must remain disabled |
-
-Required seed hashes:
-
-```text
-Z.1 S14.b: 95b95ece9bcb43a5bc2c9313dc5c9b1f8d9874983a9dbfde666bb34f89606f45
-Z.1 S1M.b: 751291a66e349524d6bdbc5827e0a5f085c4c2340809d621f09da2fb00b44421
-DFA ZIP:    a7804fb240cb6153d6beb04335ac558cb4e0c5c2ba221eba7c41b9c62ce36274
-```
-
-Add the ten current FRED snapshot hashes to the manifest. Keep `cay_data/raw`
-tracked until this gate passes.
-
-## 1. Goal
-
-Convert the repository to a classic installable Python `src` layout with one
-package, `cay_lab`, while keeping root `tests/`, project configuration, data,
-notebooks, reports, and PyDoit entry points.
-
-The core replication and extension will share one environment, one installed
-package, one settings layer, and one root workflow.
-
-This structural migration must not change:
-
-- core replication data, estimates, artifacts, or audit results;
-- extension source definitions, formulas, defaults, rows, statistics, or output
-  content;
-- plain `doit`, which remains core-only.
-
-## 2. Final Project Structure
+## 3. Target Structure and Workflow
 
 ```text
 Study_of_Cay_and_Predictivity_Lab/
-|-- pyproject.toml
-|-- environment.yml
-|-- README.md
-|-- WORKFLOW_CONVERGENCE_PLAN.md
-|-- dodo.py
-|-- settings.py
-|-- chartbook.toml
-|-- ruff.toml
 |-- .env.example
 |-- .gitignore
+|-- README.md
+|-- environment.yml
+|-- chartbook.toml
+|-- ruff.toml
+|-- dodo.py
+|-- settings.py
 |-- src/
-|   `-- cay_lab/
-|       |-- __init__.py
-|       |-- settings.py
+|   |-- settings.py
+|   |-- pipeline.py
+|   |-- bootstrap_real_data.py
+|   |-- data/
+|   |   |-- core acquisition and normalization
+|   |   `-- extension acquisition and preparation
+|   |-- analysis/
+|   |   |-- cay_builder.py
+|   |   `-- core analysis
+|   |-- reporting/
+|   `-- extension/
+|       |-- loader.py
+|       |-- decomposition.py
+|       |-- predictive_regression.py
+|       |-- predictivity.py
+|       |-- rolling_monitor.py
 |       |-- pipeline.py
-|       |-- bootstrap_real_data.py
-|       |-- tasks.py
-|       |-- data/
-|       |-- analysis/
-|       |-- reporting/
-|       `-- extension/
+|       |-- reporting.py
+|       `-- chartbook.py
 |-- tests/
 |-- config/
 |-- docs/
+|   `-- WORKFLOW_CONVERGENCE_PLAN.md
 |-- notebooks/
 |-- reports/
-|-- _data/       # ignored
-`-- _output/     # ignored
+|   |-- build/
+|   |   `-- main.pdf                 # ignored final report
+|   |-- tables/appendix/
+|   |-- figures/
+|   `-- paper/generated/
+|-- _data/                         # ignored
+|   |-- raw/core/
+|   |-- raw/extension/
+|   |-- normalized/core/
+|   |-- normalized/extension/
+|   |-- processed/core_quarterly.parquet
+|   `-- processed/extension/
+`-- _output/extension/             # ignored
 ```
 
-`src/` is not a package: remove `src/__init__.py`. Keep tests and project assets
-at the repository root. Keep root `dodo.py` and `settings.py` as thin imports
-from `cay_lab`.
+`.env` remains a local ignored secrets file; `.env.example` is the tracked
+template. `.git/` is repository metadata and is not part of the managed project
+layout. `pyproject.toml` is intentionally absent because this repository is not
+being packaged; `environment.yml` is the sole environment definition.
 
-## 3. Packaging Contract
-
-Use `pyproject.toml` only for build and package metadata:
-
-```toml
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "cay-lab"
-version = "0.1.0"
-requires-python = ">=3.11"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["cay_lab*"]
-```
-
-Do not package `_data`, `_output`, config, reports, notebooks, or tests.
-
-### Environment
-
-Use `environment.yml` as the only runtime and development dependency list. It
-must include Python 3.11, `setuptools>=68`, pip, and non-Python tools such as
-Tectonic. Do not add `project.dependencies` to `pyproject.toml`.
-
-The `build-system.requires` entry in `pyproject.toml` is mandatory PEP 517 build
-metadata. Keep its Setuptools version aligned with `environment.yml`.
-
-Install the package from the repository root after creating the environment:
-
-```bash
-mamba env create -f environment.yml
-mamba activate cay
-python -m pip install --no-deps --no-build-isolation -e .
-```
-
-### Import check
-
-The import check in Section 7 must resolve to
-`<repository>/src/cay_lab/__init__.py`. Tests, notebooks, PyDoit, and module
-commands must import the installed package. Do not set `PYTHONPATH` or modify
-`sys.path`.
-
-## 4. Execution Rules
-
-1. Use `git mv`. Make one dependency-layer move per commit.
-2. Do not change algorithms, formulas, defaults, or output names in move commits.
-3. Shared modules must not import `cay_lab.extension`.
-4. Add temporary import shims only when needed; delete them in Stage 9.
-5. Run the stage gate before starting the next stage.
-
-## 5. Baselines That Must Not Change
-
-### Core
+Root task graph:
 
 ```text
-Python: 3.11
-Pytest cases collected: 137
-Review result: 136 passed; orchestration case blocked only by unavailable doit
-Processed panel SHA-256:
-0d6643bd2eea7b47f61c8dcd74f4374cc9d1025a5b8fa5f07a1c95f5d4abe485
-Generated table files: 16
-Generated figure files: 9
-Pre-PDF artifacts: 32
+config
+|-- core_acquire -> core_prepare -> build_panel -> generate_exhibits
+`-- extension_acquire -> extension_prepare -> extension_analyze
+                                      |-- extension_region_report
+                                      `-- extension_section9_chartbook
+
+build_panel ---------------------------> extension_region_report
+
+generate_exhibits + extension_region_report + extension_section9_chartbook
+    -> compile_report
 ```
 
-Also preserve semantically:
+Rules:
 
-- Table R1 rows and statuses;
-- selected risk-free and term-spread conventions;
-- historical and updated sample dates;
-- generated table values and shapes;
-- figure input data;
-- report section/exhibit inventory;
-- notebook execution.
+- Every generated target has one owner and complete file/task dependencies.
+- `extension_region_report` depends on `build_panel`; missing core data is an
+  error.
+- Section 9 may run in parallel with core exhibits; `compile_report` joins the
+  branches.
+- `doit compile_report` works from an empty `_data` root after credentials or a
+  verified local source bundle are supplied.
+- A second report build is a no-op.
 
-Timestamp-, Git-, or PDF-metadata-bearing files need not match bytes.
+## 4. Data Contract
 
-### Extension
-
-All six rebuilt extension datasets currently match byte-for-byte.
-
-```text
-prepared rows: 417
-prepared range: 1991Q2-2025Q4
-rolling rows: 297
-rolling range: 2001Q2-2025Q4
-segments: bottom50, middle40, top10
-status counts: ACTIVE 194, WEAKENED 57, LOST 46
-mean absolute error: 0.02233142675849002
-```
-
-```text
-prepared CSV SHA-256:
-73644f47d9eb23d256a1400f1bf6bcafed9b2f4ff6bd7ae75160623927eb3568
-
-rolling CSV SHA-256:
-db855e9510cda1955b56a14673d5c0c47cc60fd904060b556d077461a8ec7731
-```
-
-The chartbook remains four pages with the same summary and three segment pages.
-PDF bytes may differ. The focused extension suite has 29 passing cases.
-
-Store these expectations in `tests/fixtures/migration_baseline.json`; do not
-commit generated licensed data.
-
-## 6. Migration Stages
-
-### Stage 1: Establish packaging and guardrails
-
-- Add `pyproject.toml` and `setuptools>=68` to `environment.yml`.
-- Add migration baseline fixtures and validators.
-- Move the root package:
-
-```text
-cay_lab/ -> src/cay_lab/
-```
-
-- Remove copied caches, install editable, and check `cay_lab.__file__`.
-- Add a test that rejects shared-module imports of `cay_lab.extension`.
-
-Until Stage 7, run the moved extension workflow with
-`doit -f src/cay_lab/dodo.py`. Do not recreate root `cay_lab/`; it would shadow
-the installed package.
-
-**Gate:** import location, current tests, and both baselines pass.
-
-### Stage 2: Isolate extension-only code
-
-Within `src/cay_lab`, move:
-
-```text
-data/loader.py                    -> extension/loader.py
-analysis/decomposition.py         -> extension/decomposition.py
-analysis/predictive_regression.py -> extension/predictive_regression.py
-monitor/rolling_monitor.py        -> extension/rolling_monitor.py
-dodo.py chartbook functions       -> extension/workflow.py
-```
-
-Keep `analysis/cay_builder.py` shared. Add a re-export shim only when its
-consumer cannot move in the same commit.
-
-Preserve target timing: `prediction_window=1` creates an already forward-aligned
-target, so the chartbook intentionally calls the legacy regression with
-`horizon=0`.
-
-**Gate:** 29 extension tests, both extension hashes, metrics, and the moved
-extension workflow pass.
-
-### Stage 3: Move extension builders into the package
-
-Move:
-
-```text
-cay_data/build_components_from_s14.py -> src/cay_lab/extension/build_components.py
-cay_data/build_extension_data.py      -> src/cay_lab/extension/build_datasets.py
-```
-
-Keep script wrappers only until module commands and root tasks work.
-
-**Gate:** builder modules reproduce all six baseline datasets byte-for-byte
-from the pinned clean-room raw cache.
-
-### Stage 4: Move settings and core data
-
-Move:
-
-```text
-src/settings.py -> src/cay_lab/settings.py
-src/data/*.py   -> src/cay_lab/data/*.py
-```
-
-Root `settings.py` imports `cay_lab.settings`. Keep old `src.*` shims only for
-consumers that move later.
-
-Test root discovery for `config`, `reports`, `_data`, and `_output`, including a
-command run outside the repository.
-
-**Gate:** settings, acquisition, contracts, transformations, panel tests, source
-metadata, core panel baseline, and import boundaries pass.
-
-### Stage 5: Move core analysis
-
-Move all current `src/analysis/*.py` modules into
-`src/cay_lab/analysis/`. `estimate_cay` uses the shared `cay_builder`.
-
-Keep `cay_lab.analysis.forecasting.run_hac_regression` unchanged. Do not merge
-the core and extension regression implementations.
-
-**Gate:** CAY modes, conventions, Tables II/III/VI/R1, figures, and both product
-baselines pass.
-
-### Stage 6: Move reporting, pipeline, and bootstrap
-
-Move:
-
-```text
-src/reporting/*.py         -> src/cay_lab/reporting/*.py
-src/pipeline.py            -> src/cay_lab/pipeline.py
-src/bootstrap_real_data.py -> src/cay_lab/bootstrap_real_data.py
-```
-
-Keep temporary old-namespace shims. Preserve artifact IDs, paths, schemas,
-captions, dependencies, and LaTeX content.
-
-Run:
-
-```bash
-python -m cay_lab.settings
-python -m cay_lab.pipeline panel
-python -m cay_lab.pipeline exhibits
-python -m cay_lab.pipeline report
-python -m cay_lab.bootstrap_real_data --compile-report
-```
-
-**Gate:** 32 artifacts, 16/9 table/figure files, audit semantics, notebook, PDF,
-module commands, temporary old commands, and both baselines pass.
-
-### Stage 7: Centralize PyDoit
-
-Move task implementations into `src/cay_lab/tasks.py`. Root `dodo.py` imports
-`DOIT_CONFIG` and each `task_*` function.
-
-Add `config/extension.yml` and root tasks:
-
-```text
-extension_acquire
-extension_data
-extension_chartbook
-extension
-```
-
-Ownership:
-
-```text
-extension_acquire   -> pinned raw cache and metadata
-extension_data      -> normalized/processed extension data
-extension_chartbook -> prepared CSV, rolling CSV, chartbook PDF
-extension           -> aggregate task with no target
-```
-
-Plain `doit` remains core-only.
-
-**Gate:** task discovery, target ownership, dependency order, failure behavior,
-freshness, no-op second run, and both baselines pass.
-
-### Stage 8: Migrate consumers and data paths
-
-Update tests, root entry points, README, notebooks, report docs, Chartbook
-metadata, and CI commands to `cay_lab` paths.
-
-After source acquisition passes, move extension data into:
+Use these paths:
 
 ```text
 _data/raw/extension/
+_data/raw/extension/market/
 _data/normalized/extension/
 _data/processed/extension/
 _output/extension/
+reports/paper/generated/extension_report.tex
 ```
 
-Track source manifests, hashes, schemas, and small synthetic fixtures. Ignore
-raw and processed extension data. Set Ruff first-party imports to `cay_lab`.
-
-**Gate:** no real consumer imports an old path; clean-room acquisition and both
-baselines pass from the new paths.
-
-### Stage 9: Remove shims and dead trees
-
-Delete in order:
-
-1. old `src.analysis`, `src.data`, `src.reporting`, settings, pipeline, and
-   bootstrap shims;
-2. `src/__init__.py`, leaving `src/` as a non-package source container;
-3. old extension module shims and empty `src/cay_lab/monitor`;
-4. `src/cay_lab/dodo.py` and builder wrappers;
-5. `cay_data/` after ignored-data clean-room reconstruction and any Git-history
-   cleanup are approved.
-
-Final searches must show:
+Required extension inputs:
 
 ```text
-no tracked Python import begins with src
-no shared module imports cay_lab.extension
-no Python implementation exists outside src/cay_lab except thin root entry points
-src contains only cay_lab and packaging metadata artifacts
-cay_data is absent
+Federal Reserve Z.1 S14.b
+Federal Reserve Z.1 S1M.b
+Federal Reserve DFA ZIP (extract dfa-networth-levels-detail.csv only)
+FRED CASTHPI, ILSTHPI, TXSTHPI, USSTHPI
+FRED CAPCPI, ILPCPI, TXPCPI
+FRED CAPOP, ILPOP, TXPOP
+QQQ daily adjusted-close prices for the Section 9 sample
 ```
 
-**Gate:** run full core and extension checks after each deletion batch.
+FDIC remains disabled and requires no source file. Verify every regional row
+uses `income_share_fallback`.
 
-## 7. Validation
+After the Phase 3 baseline gate, do not move, copy, or track files with no
+runtime consumer: supplemental OECD/S1M-e Z.1 extracts, DFA general-level files
+and dictionaries, and `data_availability.csv`.
 
-Run after each applicable stage:
+Acquisition modes:
+
+- `baseline`: import or download hash-verified core and extension sources and
+  reproduce the recorded report. Resolve local extension bundles from
+  `EXTENSION_INPUT_DIR`.
+- `latest`: acquire current BEA, FRED, Shiller, WRDS, Federal Reserve, and market
+  data; write a new manifest and never overwrite baseline hashes.
+
+Live acquisition can populate `_data`, but revised providers cannot guarantee
+byte-identical results. Exact reproduction requires the pinned source bundle.
+Document credentials and local bundles under README `Data Sources and Setup`;
+they are prerequisites, not hidden files.
+
+`config/extension_sources.yml` records provider, source ID/query, vintage,
+coverage, units, cache path, acquisition mode, and SHA-256. QQQ is a declared
+source; chartbook rendering never performs hidden network fallback.
+
+Current QQQ cache reference:
+
+```text
+rows: 814
+coverage: 2023-01-03 through 2026-04-01
+SHA-256: ecbcf48746b1167b502d06fd07022f3f2ff7eff69fb89c4d4b08a8853c802bbb
+```
+
+Extension tests use synthetic temporary inputs. Section 8/9 report inputs are
+required task outputs, not `\IfFileExists` fallbacks.
+
+## 5. Output Baselines
+
+Record these in `tests/fixtures/migration_baseline.json` before moving code or
+paths.
+
+```text
+Regional extension
+prepared rows: 414
+rolling rows: 294
+segments: California, Illinois, Texas
+status: ACTIVE 207, WEAKENED 46, LOST 41
+prepared SHA-256: 628aa0fc06e7daa9fd20560343dcd824390d66be8f4f611c55a7acf79b586c48
+rolling SHA-256: 802f7baec074b2f0ebdb9d1459d5824234970f76472f078eb1d3253433aa1bae
+
+Section 9 example
+prepared rows: 30
+rolling rows: 6
+segments: bottom50, middle40, top10
+prepared SHA-256: e83e66a794ee34d8cb0709dcc6cc66719734c12fae2e90f8e74ba212561ba61d
+rolling SHA-256: 7bc1dff59f855082093ca338c3d3b5748d78b1e44805492e02a4a930c751bbae
+```
+
+Also record the core panel, report exhibit inventory, audit values, and current
+regional/Section 9 chartbook page counts. Compare PDF content semantically;
+PDF metadata need not match bytes.
+
+## 6. Historical Replication Fix
+
+### Diagnosis
+
+The current pipeline selects bill and term-spread candidates by minimizing
+Table III target error, then audits against those targets. Replace that circular
+selection with the source-defined historical contract:
+
+```text
+risk-free return: CRSP 30-day Treasury bill (t30ret)
+term spread: 10-year Treasury yield minus 3-month Treasury yield
+CRSP market return: vwretd
+quarterly return: sum monthly log1p returns
+relative bill rate: current bill return minus the prior four-quarter mean
+HAC lags: max(1, horizon - 1)
+```
+
+Two implementation choices caused the three failures:
+
+1. RREL includes the current quarter in its own four-quarter benchmark.
+2. One-quarter regressions use an unrelated automatic four-lag HAC bandwidth.
+
+Verified corrections:
+
+```python
+relative_bill_rate = (
+    nominal_rate - nominal_rate.shift(1).rolling(4, min_periods=4).mean()
+)
+
+def newey_west_lags(observations: int, horizon: int) -> int:
+    return max(1, horizon - 1)
+```
+
+Results:
+
+```text
+RREL fix only: 28 strict, 9 revised-vintage, 2 failed
+RREL + HAC fix: 24 strict, 15 revised-vintage, 0 failed
+```
+
+Key corrected values:
+
+| Metric | Actual | Target | Status |
+|---|---:|---:|---|
+| Table II RREL/cay correlation | -0.1823 | -0.23 | revised-vintage |
+| Table III row 4 cay t-statistic | 3.9969 | 4.754 | revised-vintage |
+| Table III row 8 cay t-statistic | 4.0761 | 4.583 | revised-vintage |
+| Table III row 13 cay coefficient | 1.6244 | 1.906 | revised-vintage |
+| Table III row 13 cay t-statistic | 2.8320 | 3.197 | strict |
+| Table III row 13 term coefficient | -0.0710 | -0.082 | strict |
+| Table III row 13 adjusted R-squared | 0.1032 | 0.10 | strict |
+
+Row 13 starts in 1953Q2 with 181 observations. Every Table VI check remains
+strict or revised-vintage; its lag set is 1, 1, 2, 3, 7, 11, 15, and 23 for
+horizons 1, 2, 3, 4, 8, 12, 16, and 24.
+
+Sensitivity checks ruled out `vwretx`, `t90ret`, return arithmetic, predictor
+timing, and CAY calibration as fixes. Store all sensitivity results, source
+definitions, and ruling-out evidence in
+`reports/build/table_iii_source_diagnostics.json`.
+
+Required tests:
+
+- RREL excludes the current quarter.
+- Historical primary columns use `bill_30d` and `term_10y_3m`.
+- Table III uses one HAC lag.
+- Table VI uses `max(1, h-1)`.
+- Row 13 starts in 1953Q2 with 181 observations.
+- All 39 audit checks are strict or revised-vintage passes.
+
+## 7. Report Contract
+
+### Current Defects
+
+| PDF table | Artifact | Defect |
+|---:|---|---|
+| 1 | `table_ii_replication` | 45 structural `NaN` cells |
+| 2 | `table_iii_replication` | 40 term rows for 13 models |
+| 3 | `table_vi_replication` | 128 term rows for 48 models; oversized float |
+| 4 | `table_ii_updated` | 45 structural `NaN` cells |
+| 5 | `table_iii_updated` | 40 term rows for 13 models |
+| 6 | `table_vi_updated` | 128 term rows for 48 models; oversized float |
+| 7 | `table_s1_core_data_summary` | 220 structural `NaN` cells |
+
+Root causes:
+
+- Raw tidy frames are passed directly to `DataFrame.to_latex`.
+- Incompatible panels are concatenated into union schemas.
+- Regression output has one row per coefficient term, not per model.
+- Oversized floats cross section boundaries.
+- Caption validation prompts are emitted as display text; data vintage repeats.
+- Sections 3--5 have subsection headings but no interpretation paragraphs.
+
+### Publication Tables
+
+Keep analysis functions and statistical methods unchanged. Add table-specific
+adapters under `src/reporting/tables.py`; report tables never serialize raw
+analysis frames.
+Use explicit blank publication cells and reject unexpected numerical missing
+values.
+
+- **Table 1:** five-row historical moments panel plus lower-triangular
+  correlation panel.
+- **Table 2:** all 13 historical one-quarter models exactly once across
+  return-definition, predictor-comparison, and full-control panels. Predictor
+  cells contain coefficient and parenthesized HAC t-statistic.
+- **Table 3:** two historical panels (consumption growth and excess returns),
+  eight horizon rows each. Full 48-model results go to appendix longtables/CSV.
+- **Table 4:** historical-versus-updated moments and correlations. Do not compare
+  raw historical and updated `cay` means; additive normalization differs.
+- **Table 5:** rows 2, 4, 6, 8, and 13 compare historical and updated `cay`
+  estimates. Full 13-model updated output goes to the appendix/CSV.
+- **Table 6:** historical-versus-updated long-horizon panels. Full 48-model
+  updated output goes to the appendix/CSV.
+- **Table 7:** separate coverage, historical summary, and updated summary panels.
+- **Table 8:** status totals and non-strict checks in the main report; all 39
+  checks remain in appendix/CSV.
+
+Write appendix detail under `reports/tables/appendix/`, generate
+`reports/paper/generated/appendix_tables.tex`, and include it once from
+`appendix.tex` using `longtable`, not floating tables.
+
+Separate machine-readable frames from rendered TeX. Store incompatible panels
+as separate CSV files. Derive artifacts from `report_contract.yml`; remove the
+hard-coded 32-artifact count.
+
+### Evidence Paragraphs and Captions
+
+Add `src/reporting/findings.py::write_empirical_findings`. It writes
+`reports/paper/generated/empirical_findings.tex` with these macros:
+
+```text
+HistoricalSummaryFinding
+HistoricalFigureFinding
+HistoricalShortHorizonFinding
+HistoricalLongHorizonFinding
+UpdatedSummaryFinding
+UpdatedFigureFinding
+UpdatedShortHorizonFinding
+UpdatedLongHorizonFinding
+DataCoverageFinding
+DataAnatomyFinding
+```
+
+Include the generated file once from `main.tex`. Sections 3--5 invoke the
+matching macro immediately after each subsection heading and before the exhibit.
+Each paragraph states what was tested, what the generated evidence says, and why
+it matters.
+
+Macro order is explicit: Section 3 uses the four `Historical*` macros; Section
+4 uses the four `Updated*` macros; Section 5 uses `DataCoverageFinding` and
+`DataAnatomyFinding`.
+
+Make `report_contract.yml` the sole exhibit registry and remove
+`reports/captions.yml`. Each entry owns title, label, section, role, paths,
+sample rule, benchmark citation, provider citations, source IDs, and source
+note. Caption rendering never emits validation prompts or instructional text.
+It emits data vintage once and requires explicit display notes/takeaways.
+
+Add `placeins` and `\FloatBarrier` before each report section. Main tables fit
+one page and `\textwidth`; appendix detail uses `longtable`.
+
+### Exhibit Registry
+
+Source bundles:
+
+- **H:** LL author historical macro inputs; Shiller S&P/dividend/earnings/CPI;
+  CRSP `vwretd`/`t30ret`; FRED rates/spreads and FRED/NBER recessions as used.
+- **U:** BEA consumption/labor income; Federal Reserve/FRED wealth and rates;
+  Shiller, CRSP, and FRED/NBER current-vintage inputs.
+- **R:** Federal Reserve Z.1 HNPO wealth scaled by FRED state
+  HPI/income/population shares, plus required U core variables.
+- **W:** Federal Reserve DFA wealth-group detail plus pinned QQQ adjusted-close
+  prices; provider recorded in `extension_sources.yml`.
+- **A:** Fixed LL targets, author-posted `cay`, and generated audit values.
+
+Tables:
+
+| # | Artifact | Title | Label | Benchmark | Source |
+|---:|---|---|---|---|---|
+| 1 | `table_ii_replication` | Historical Summary Statistics and Correlations | `tab:historical_summary` | LL Table II | H |
+| 2 | `table_iii_replication` | Historical One-Quarter Return Forecasts | `tab:historical_one_quarter` | LL Table III | H |
+| 3 | `table_vi_replication` | Historical Long-Horizon CAY Regressions | `tab:historical_long_horizon` | LL Table VI | H |
+| 4 | `table_ii_updated` | Updated Summary Statistics: Historical Comparison | `tab:updated_summary` | follows LL Table II | U |
+| 5 | `table_iii_updated` | Updated One-Quarter CAY Forecasts: Historical Comparison | `tab:updated_one_quarter` | follows LL Table III | U |
+| 6 | `table_vi_updated` | Updated Long-Horizon CAY Forecasts: Historical Comparison | `tab:updated_long_horizon` | follows LL Table VI | U |
+| 7 | `table_s1_core_data_summary` | Core Data Coverage and Diagnostics | `tab:data_diagnostics` | none | U |
+| 8 | `table_r1_replication_audit` | Historical Replication Audit | `tab:replication_audit` | LL Tables II/III/VI and author-posted `cay` | A |
+| 9 | `table_ii_extension_cay_r` | Regional-Proxy CAY Summary Statistics | `tab:regional_summary` | follows LL Table II | R |
+| 10 | `table_iii_extension_cay_r` | Regional-Proxy One-Quarter Return Forecasts | `tab:regional_one_quarter` | follows LL Table III | R |
+| 11 | `table_vi_extension_cay_r` | Regional-Proxy Long-Horizon Forecasts | `tab:regional_long_horizon` | follows LL Table VI | R |
+
+Figures:
+
+| # | Artifact/segment | Title | Label | Benchmark | Source |
+|---:|---|---|---|---|---|
+| 1 | `figure_1_replication` | Historical CAY and Excess Returns | `fig:historical_cay_returns` | LL Figure 1 | H |
+| 2 | `figure_1_updated` | Updated CAY and Excess Returns | `fig:updated_cay_returns` | follows LL Figure 1 | U |
+| 3 | `figure_s1_data_anatomy` | Consumption, Income, and Wealth: Levels and Growth | `fig:data_anatomy` | none | U |
+| 4 | `figure_1_extension_cay_r` | Regional-Proxy CAY and Excess Returns | `fig:regional_cay_returns` | follows LL Figure 1 | R |
+| 5 | `bottom50` | Bottom 50%: Two-Quarter QQQ Forecast Diagnostics | `fig:section9_bottom50` | none | W |
+| 6 | `middle40` | Middle 40%: Two-Quarter QQQ Forecast Diagnostics | `fig:section9_middle40` | none | W |
+| 7 | `top10` | Top 10%: Two-Quarter QQQ Forecast Diagnostics | `fig:section9_top10` | none | W |
+
+Historical exhibits are authors' calculations benchmarked to LL, not numbers
+copied from the paper. Updated/regional captions say the specification follows
+LL and identify actual providers.
+
+Regional Tables 9--11 become numbered table environments. A generated Section 9
+manifest maps page number to segment, sample, target, source hash, and label;
+Figures 5--7 never assume page order.
+
+Registry citation keys must exist in `references.bib`; source IDs must exist in
+the core/extension source manifests. `artifact_manifest.json` records each
+exhibit's source IDs and resolved input hashes. Validation rejects defaults,
+unknown sources, or declared sources absent from task/file dependencies.
+
+## 8. Execution Plan
+
+### Phase 0: Protect State and Stabilize Tests
+
+1. Preserve current modifications under `cay_data/raw` and the untracked QQQ
+   cache.
+2. Record core, regional, Section 9, and report baselines.
+3. Split regional and Section 9 fixture sections.
+4. Fix the optional WRDS-password test and replace the stale concurrency test
+   with sequential order, cache, logging, and failure-propagation tests.
+5. Run the full suite in the declared `cay` environment.
+
+**Gate:** no failing tests; small baseline fixtures are committed.
+
+### Phase 1: Fix Historical Methods
+
+1. Fix the historical convention to `bill_30d` and `term_10y_3m`; retain other
+   candidates as labeled robustness results.
+2. Apply the RREL and HAC formulas in Section 6.
+3. Add lineage/sensitivity diagnostics and regression tests.
+4. Regenerate Table R1; document exact methods in report methodology, captions,
+  and the generated diagnostic JSON.
+
+**Gate:** 24 strict, 15 revised-vintage, 0 failed; all 39 targets/tolerances are
+unchanged.
+
+### Phase 2: Keep One Workflow and Code Tree
+
+1. Move reusable chartbook analysis out of `cay_lab/dodo.py`; root tasks call
+   extension modules directly. Delete the legacy task file.
+2. Consolidate predictivity/status/chartbook implementations.
+3. Remove `test_main.pdf`, per-run Jupyter kernel installation, and duplicate
+   bootstrap orchestration.
+4. Fix core task dependencies and target ownership.
+5. Move `cay_lab/analysis/cay_builder.py` to `src/analysis/cay_builder.py`; move
+  other extension modules to `src/extension`; update imports, task
+  dependencies, report inputs, notebooks, and tests.
+6. Merge extension paths into `src.settings.Settings`.
+7. Delete `cay_lab`, `pyproject.toml`, packaging tests, editable-install docs,
+   and compatibility shims unless an actual external consumer is found.
+
+**Gate:** root `doit list` is the only task surface; no import starts with
+`cay_lab`; tests and output baselines pass; second report build is a no-op.
+
+### Phase 3: Unify and Untrack Data
+
+1. Move extension builders to `src/data` and parameterize all paths.
+2. Implement `extension_acquire`, `extension_prepare`, `extension_analyze`,
+   `extension_region_report`, and `extension_section9_chartbook`.
+3. Implement baseline/latest acquisition modes and QQQ source handling.
+4. Make regional report depend on the core panel; replace real-data tests with
+   synthetic fixtures; remove silent report fallbacks.
+5. Rebuild from an empty temporary `_data` root with the baseline bundle.
+6. Add ignored data/output paths, remove tracked provider/generated bytes, and
+   delete `cay_data` only after the clean-room gate passes.
+
+**Gate:** clean baseline rebuild matches the Section 5 regional/Section 9
+hashes; `git ls-files` contains no provider/generated data; no test reads
+deleted fixtures.
+
+### Phase 4: Rebuild Report Presentation
+
+1. Add table-specific publication adapters and appendix longtables.
+2. Add generated evidence paragraphs and concise captions.
+3. Consolidate exhibit metadata into `report_contract.yml`; add all core,
+   regional, and Section 9 entries from Section 7.
+4. Add source IDs/hashes, citation validation, segment page manifest, and
+   semantic labels.
+5. Add float barriers and update the artifact contract.
+6. Add report/PDF tests.
+
+**Gate:** Sections 3--5 form a connected argument; Tables 1--7 contain no
+structural nulls or duplicate term rows; Tables 9--11 are numbered; all 18
+labels/sources validate; exhibit order, audit values, regional outputs, and
+Section 9 outputs pass.
+
+### Phase 5: Documentation and Final Verification
+
+1. Rewrite README for one environment, one root workflow, baseline/latest data
+   modes, credentials, and output locations.
+2. Remove obsolete `cay_lab`, `cay_data`, editable-install, and legacy task
+   instructions.
+3. Replace absolute artifact-manifest paths with repository-relative paths.
+4. Run the full verification matrix below.
+
+## 9. Verification
 
 ```bash
-python -c "import cay_lab; print(cay_lab.__file__)"
-python -m pytest
+python -m pytest -q
 ruff check .
+ruff format --check .
+git diff --check
 doit list
+doit compile_report
+doit compile_report
 ```
 
-Run plain `doit` and `doit extension` after Stage 7, then rerun both to verify a
-no-op second run. Run the core and extension baseline validators before each
-commit and before deleting a shim.
+Required report checks:
 
-## 8. Out of Scope
+- no core table TeX or extracted PDF text contains literal `NaN`;
+- Table 2 contains model IDs 1--13 once; Table 5 contains 2/4/6/8/13 once;
+- populated regression cells match source coefficients/t-statistics;
+- Tables 3/6 contain two panels and eight horizons; appendix contains all 48
+  historical and 48 updated model keys;
+- no main table prints constants, raw p-values, or repeated metadata;
+- every Section 3--5 subsection has one generated evidence paragraph;
+- captions contain no instructions, duplicate vintage, raw labels, or default
+  source text;
+- Tables 1--3 precede Section 4; Tables 4--6 precede Section 5; Table 7 is in
+  Section 5;
+- no core report `Float too large` or overfull-table warning;
+- 11 tables and 7 figures have unique labels, benchmarks, provider sources,
+  valid citations, source IDs, and input hashes;
+- Tables 9--11 are numbered; Figure 4 and Figures 5--7 have source-complete,
+  segment-correct captions;
+- final `main.log` has no unresolved citation/reference or duplicate label;
+- the audit remains 24 strict, 15 revised-vintage, 0 failed;
+- regional and Section 9 baselines match;
+- the second `doit compile_report` performs no actions or file writes; verify
+  task output and unchanged file hashes.
 
-Do not include these changes in the migration:
+## 10. Completion Criteria
 
-- econometric, formula, sample, or default changes;
-- latest-vintage source refreshes;
-- HAC implementation consolidation or bug fixes;
-- extension content in the core report;
-- fabricated template or contribution provenance.
-
-Core Table R1 must not depend on extension data. Keep
-`report.include_extension` false.
-
-## 9. Completion Checklist
-
-- [ ] `pyproject.toml` defines the installable `cay-lab` project.
-- [ ] Editable installation resolves `cay_lab` from `src/cay_lab`.
-- [ ] Root `tests/` exercise the installed package without path manipulation.
-- [ ] Extension sources reacquire from an empty ignored data root with pinned hashes.
-- [ ] All application implementation is under `src/cay_lab`.
-- [ ] `src/__init__.py`, old `src.*` packages, root `cay_lab`, and `cay_data` are absent.
-- [ ] Root `dodo.py` and `settings.py` are thin entry points.
-- [ ] Module commands and root tasks work.
-- [ ] Plain `doit` remains core-only.
-- [ ] Shared modules never import extension modules.
-- [ ] Core panel, audit, samples, conventions, and artifacts match baseline.
-- [ ] Extension data, CSV results, metrics, and chartbook content match baseline.
-- [ ] Tests, Ruff, notebook, and report checks pass.
-- [ ] README documents one environment, editable install, and both workflows.
-- [ ] Source provenance, hashes, proxy status, and fallback behavior are explicit.
-- [ ] No compatibility shim remains unless an external consumer is documented.
-
-Migration is complete when a clean checkout can create the environment, install
-the package, and reproduce both workflows and baselines from root commands.
+- One code tree: `src`.
+- One workflow: root `dodo.py`.
+- One environment definition: `environment.yml`.
+- No `cay_lab`, `cay_data`, or `pyproject.toml`.
+- No provider or generated data tracked by Git.
+- Empty `_data` rebuild works with a verified source bundle.
+- All tests, lint, report, source, and clean-room checks pass.
+- Historical audit: 24 strict, 15 revised-vintage, 0 failed.
+- Sections 3--5 contain concise generated interpretation.
+- Report tables contain no structural nulls, duplicate term rows, or misplaced
+  floats.
