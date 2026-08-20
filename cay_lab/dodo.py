@@ -1,7 +1,21 @@
-"""doit tasks for sub-cay predictivity chartbook generation.
+"""doit tasks for the CAY extension (cay_components_region) pipeline.
 
-Usage example:
-    doit -f cay_lab/dodo.py chartbook --dataset wealth_groups --train-periods 48 --prediction-window 1
+The staged tasks mirror the replication workflow in the root ``dodo.py``:
+  1. import_region_data     – validate & normalise raw region CSV
+  2. build_extension_panel  – prepare predictivity panel (parquet)
+  3. generate_extension_exhibits – run analysis, chartbook PDF + CSVs
+  4. generate_combined_report    – write combined replication+extension .tex
+
+Legacy ``chartbook`` task is preserved for backward compatibility and
+now delegates to the staged pipeline (uses the prepared panel).
+
+Usage:
+    doit -f cay_lab/dodo.py                           # run all staged tasks
+    doit -f cay_lab/dodo.py import_region_data
+    doit -f cay_lab/dodo.py build_extension_panel
+    doit -f cay_lab/dodo.py generate_extension_exhibits
+    doit -f cay_lab/dodo.py generate_combined_report
+    doit -f cay_lab/dodo.py chartbook --dataset wealth_groups
 """
 
 from __future__ import annotations
@@ -9,14 +23,40 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import pandas as pd
-from matplotlib.backends.backend_pdf import PdfPages
-from statsmodels.tools import add_constant
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+import matplotlib.pyplot as plt  # noqa: E402  (kept for legacy task)
+import pandas as pd  # noqa: E402
+from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
+from statsmodels.tools import add_constant  # noqa: E402
+
+from cay_lab.pipeline import (  # noqa: E402
+    PANEL_STEM,
+    REGION_NORMALIZED_STEM,
+    build_extension_panel,
+    generate_combined_report,
+    generate_extension_exhibits,
+    import_region_data,
+)
+from cay_lab.settings import load_extension_settings  # noqa: E402
+
+SETTINGS = load_extension_settings()
+REGION_NORMALIZED_PARQUET = SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.parquet"
+REGION_NORMALIZED_META = SETTINGS.output_dir / f"{REGION_NORMALIZED_STEM}.metadata.json"
+PANEL_PARQUET = SETTINGS.output_dir / f"{PANEL_STEM}.parquet"
+PANEL_META = SETTINGS.output_dir / f"{PANEL_STEM}.metadata.json"
+EXTENSION_ARTIFACTS = [
+    SETTINGS.output_dir / "extension_prepared.csv",
+    SETTINGS.output_dir / "extension_rolling.csv",
+    SETTINGS.output_dir / "extension_chartbook.pdf",
+    SETTINGS.output_dir / "extension_qa.json",
+]
+COMBINED_REPORT = SETTINGS.reports_dir / "combined_replication_extension.tex"
+REGION_SOURCE_CSV = (
+    PROJECT_ROOT / "cay_data" / "cay_components_region_ca_il_tx_q_proxy.csv"
+)
 
 from cay_lab.analysis.predictive_regression import PredictiveRegression  # noqa: E402
 from cay_lab.data.loader import prepare_predictivity_dataset  # noqa: E402
@@ -273,3 +313,75 @@ def task_chartbook():
         ],
         "verbosity": 2,
     }
+
+
+# ---------------------------------------------------------------------------
+# Staged pipeline tasks (mirrors root dodo.py structure)
+# ---------------------------------------------------------------------------
+
+
+def task_import_region_data():
+    """Stage 1: Validate and normalise the region-proxy CSV to parquet.
+
+    Analogous to ``task_normalize_pulled_sources`` in the root dodo.
+    """
+    return {
+        "actions": [lambda: import_region_data(SETTINGS)],
+        "file_dep": [str(REGION_SOURCE_CSV)],
+        "targets": [str(REGION_NORMALIZED_PARQUET), str(REGION_NORMALIZED_META)],
+        "verbosity": 2,
+    }
+
+
+def task_build_extension_panel():
+    """Stage 2: Build the predictivity panel from normalised region data.
+
+    Analogous to ``task_build_panel`` in the root dodo.
+    """
+    return {
+        "actions": [lambda: build_extension_panel(SETTINGS)],
+        "file_dep": [str(REGION_NORMALIZED_PARQUET)],
+        "targets": [str(PANEL_PARQUET), str(PANEL_META)],
+        "task_dep": ["import_region_data"],
+        "verbosity": 2,
+    }
+
+
+def task_generate_extension_exhibits():
+    """Stage 3: Run analysis and produce all extension artifacts.
+
+    Analogous to ``task_generate_exhibits`` in the root dodo.
+    Produces: extension_prepared.csv, extension_rolling.csv,
+    extension_chartbook.pdf, extension_qa.json.
+    """
+    return {
+        "actions": [lambda: generate_extension_exhibits(SETTINGS)],
+        "file_dep": [str(PANEL_PARQUET)],
+        "targets": [str(p) for p in EXTENSION_ARTIFACTS],
+        "task_dep": ["build_extension_panel"],
+        "verbosity": 2,
+    }
+
+
+def task_generate_combined_report():
+    """Stage 4: Write combined replication + extension LaTeX section.
+
+    Analogous to the report stage in root dodo.
+    """
+    return {
+        "actions": [lambda: generate_combined_report(SETTINGS)],
+        "file_dep": [str(SETTINGS.output_dir / "extension_qa.json")],
+        "targets": [str(COMBINED_REPORT)],
+        "task_dep": ["generate_extension_exhibits"],
+        "verbosity": 2,
+    }
+
+
+DOIT_CONFIG = {
+    "default_tasks": [
+        "import_region_data",
+        "build_extension_panel",
+        "generate_extension_exhibits",
+        "generate_combined_report",
+    ]
+}
