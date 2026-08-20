@@ -1,0 +1,33 @@
+{
+  "core": {
+    "python_version": "3.11",
+    "pytest_collected": 137,
+    "pytest_passed": 136,
+    "pytest_blocked": 1,
+    "processed_panel_sha256": "0d6643bd2eea7b47f61c8dcd74f4374cc9d1025a5b8fa5f07a1c95f5d4abe485",
+    "generated_table_files": 16,
+    "generated_figure_files": 9,
+    "pre_pdf_artifacts": 32
+  },
+  "extension": {
+    "prepared_rows": 417,
+    "prepared_range": "1991Q2-2025Q4",
+    "rolling_rows": 297,
+    "rolling_range": "2001Q2-2025Q4",
+    "segments": [
+      "bottom50",
+      "middle40",
+      "top10"
+    ],
+    "status_counts": {
+      "ACTIVE": 194,
+      "WEAKENED": 57,
+      "LOST": 46
+    },
+    "mean_absolute_error": 0.02233142675849002,
+    "prepared_csv_sha256": "73644f47d9eb23d256a1400f1bf6bcafed9b2f4ff6bd7ae75160623927eb3568",
+    "rolling_csv_sha256": "db855e9510cda1955b56a14673d5c0c47cc60fd904060b556d077461a8ec7731",
+    "chartbook_pages": 4,
+    "focused_extension_pytest_cases": 29
+  }
+}
