@@ -26,12 +26,12 @@ class BeaComponent:
 
 
 BEA_COMPONENTS = (
-    BeaComponent("nondurable_goods", "NIPA", "T20306", "Nondurable goods"),
-    BeaComponent("services", "NIPA", "T20306", "Services"),
+    BeaComponent("nondurable_goods", "NIPA", "T20305", "Nondurable goods"),
+    BeaComponent("services", "NIPA", "T20305", "Services"),
     BeaComponent(
         "clothing_footwear",
-        "NIUnderlyingDetail",
-        "U20406",
+        "NIPA",
+        "T20305",
         "Clothing and footwear",
     ),
     BeaComponent("wages", "NIPA", "T20100", "Wages and salaries"),

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
 from time import monotonic
@@ -42,7 +41,10 @@ def _pull_wrds(settings: Settings, raw_dir: Path) -> None:
     import wrds
 
     LOGGER.info("Connecting to WRDS")
-    connection = wrds.Connection(wrds_username=settings.wrds_username)
+    connection = wrds.Connection(
+        wrds_username=settings.wrds_username,
+        wrds_password=settings.wrds_password or "",
+    )
     LOGGER.info("Connected to WRDS and loaded accessible libraries")
     try:
         pull_wrds_data(connection, raw_dir / "wrds")
@@ -68,32 +70,36 @@ def bootstrap_real_data(settings: Settings, *, compile_report: bool = False) -> 
     settings.create_directories()
     raw_dir = settings.data_dir / "raw"
     normalized_dir = settings.data_dir / "normalized"
-    public_acquisition_steps = {
-        "author data": partial(
-            ensure_author_data, normalized_dir, vintage=settings.end_date
-        ),
-        "FRED data": partial(
-            pull_fred_data,
-            raw_dir / "fred",
-            start_date=settings.start_date,
-            end_date=settings.end_date,
-            vintage=settings.end_date,
-        ),
-        "BEA data": partial(
-            pull_bea_data, raw_dir / "bea", api_key=settings.bea_api_key
-        ),
-        "Shiller data": partial(pull_shiller_data, raw_dir / "shiller"),
-    }
-    with ThreadPoolExecutor(
-        max_workers=len(public_acquisition_steps), thread_name_prefix="bootstrap-pull"
-    ) as executor:
-        futures = {
-            executor.submit(_run_step, name, action): name
-            for name, action in public_acquisition_steps.items()
-        }
+    fred_raw = raw_dir / "fred" / "fred_inputs.parquet"
+    bea_raw = raw_dir / "bea" / "bea_components.parquet"
+    shiller_raw = raw_dir / "shiller" / "shiller_monthly.parquet"
+    wrds_market_raw = raw_dir / "wrds" / "crsp_market_monthly.parquet"
+    wrds_treasury_raw = raw_dir / "wrds" / "crsp_treasury_monthly.parquet"
+
+    _run_step(
+        "author data",
+        partial(ensure_author_data, normalized_dir, vintage=settings.end_date),
+    )
+    if not fred_raw.exists():
+        _run_step(
+            "FRED data",
+            partial(
+                pull_fred_data,
+                raw_dir / "fred",
+                start_date=settings.start_date,
+                end_date=settings.end_date,
+                vintage=settings.end_date,
+            ),
+        )
+    if not bea_raw.exists():
+        _run_step(
+            "BEA data",
+            partial(pull_bea_data, raw_dir / "bea", api_key=settings.bea_api_key),
+        )
+    if not shiller_raw.exists():
+        _run_step("Shiller data", partial(pull_shiller_data, raw_dir / "shiller"))
+    if not (wrds_market_raw.exists() and wrds_treasury_raw.exists()):
         _run_step("WRDS data", partial(_pull_wrds, settings, raw_dir))
-        for future in as_completed(futures):
-            future.result()
 
     _run_step(
         "source normalization",

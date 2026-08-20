@@ -45,7 +45,7 @@ def test_fred_fetch_renames_series_at_boundary():
 
 
 def test_bea_request_pins_dataset_table_frequency_and_all_years():
-    component = BeaComponent("services", "NIPA", "T20306", "Services")
+    component = BeaComponent("services", "NIPA", "T20305", "Services")
 
     params = build_bea_params(component, "test-key")
 
@@ -53,7 +53,7 @@ def test_bea_request_pins_dataset_table_frequency_and_all_years():
         "UserID": "test-key",
         "method": "GetData",
         "datasetname": "NIPA",
-        "TableName": "T20306",
+        "TableName": "T20305",
         "Frequency": "Q",
         "Year": "X",
         "ResultFormat": "JSON",
@@ -61,7 +61,7 @@ def test_bea_request_pins_dataset_table_frequency_and_all_years():
 
 
 def test_bea_component_matching_is_exact_and_numeric():
-    component = BeaComponent("services", "NIPA", "T20306", "Services")
+    component = BeaComponent("services", "NIPA", "T20305", "Services")
     rows = [
         {"LineDescription": "Services", "TimePeriod": "2000Q2", "DataValue": "1,200.5"},
         {"LineDescription": "Other services", "TimePeriod": "2000Q1", "DataValue": "9"},

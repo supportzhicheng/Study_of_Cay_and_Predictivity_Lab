@@ -99,7 +99,10 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     import wrds
 
-    connection = wrds.Connection(wrds_username=settings.wrds_username)
+    connection = wrds.Connection(
+        wrds_username=settings.wrds_username,
+        wrds_password=settings.wrds_password or "",
+    )
     try:
         paths = pull_wrds_data(
             connection, args.raw_dir or settings.data_dir / "raw" / "wrds"

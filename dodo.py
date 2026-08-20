@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 from src.bootstrap_real_data import bootstrap_real_data
@@ -60,6 +61,19 @@ REPORT_SOURCES = (
     SETTINGS.reports_dir / "paper" / "references.bib",
     *sorted((SETTINGS.reports_dir / "paper" / "sections").glob("*.tex")),
 )
+
+
+def _run_tests_action() -> None:
+    subprocess.run(
+        [
+            str(Path(sys.executable)),
+            "-m",
+            "pytest",
+            "-q",
+            f"--junitxml={SETTINGS.output_dir / 'pytest.xml'}",
+        ],
+        check=True,
+    )
 
 
 def task_config():
@@ -162,16 +176,32 @@ def task_generate_exhibits():
 
 
 def _run_notebook() -> None:
+    kernel_name = f"cay-runtime-py{sys.version_info.major}{sys.version_info.minor}"
+    subprocess.run(
+        [
+            str(Path(sys.executable)),
+            "-m",
+            "ipykernel",
+            "install",
+            "--user",
+            "--name",
+            kernel_name,
+            "--display-name",
+            kernel_name,
+        ],
+        check=True,
+    )
     output_dir = SETTINGS.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     source = SETTINGS.project_root / "notebooks" / "01_cay_replication_tour.ipynb"
     subprocess.run(
         [
-            str(Path(__import__("sys").executable)),
+            str(Path(sys.executable)),
             "-m",
             "jupyter",
             "nbconvert",
             "--execute",
+            f"--ExecutePreprocessor.kernel_name={kernel_name}",
             "--to=notebook",
             f"--output-dir={output_dir}",
             str(source),
@@ -181,7 +211,7 @@ def _run_notebook() -> None:
     executed = output_dir / source.name
     subprocess.run(
         [
-            str(Path(__import__("sys").executable)),
+            str(Path(sys.executable)),
             "-m",
             "jupyter",
             "nbconvert",
@@ -231,21 +261,8 @@ def task_compile_report():
 def task_run_tests():
     """Run deterministic tests and write JUnit XML."""
     SETTINGS.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def run_tests():
-        subprocess.run(
-            [
-                str(Path(__import__("sys").executable)),
-                "-m",
-                "pytest",
-                "-q",
-                f"--junitxml={SETTINGS.output_dir / 'pytest.xml'}",
-            ],
-            check=True,
-        )
-
     return {
-        "actions": [run_tests],
+        "actions": [_run_tests_action],
         "targets": [str(SETTINGS.output_dir / "pytest.xml")],
     }
 

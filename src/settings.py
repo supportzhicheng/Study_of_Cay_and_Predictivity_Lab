@@ -46,6 +46,7 @@ class Settings:
     historical_start: str
     historical_end: str
     wrds_username: str | None
+    wrds_password: str | None
     bea_api_key: str | None
 
     def create_directories(self) -> None:
@@ -67,6 +68,7 @@ class Settings:
             "HISTORICAL_START": self.historical_start,
             "HISTORICAL_END": self.historical_end,
             "WRDS_USERNAME": "configured" if self.wrds_username else None,
+            "WRDS_PASSWORD": "configured" if self.wrds_password else None,
             "BEA_API_KEY": "configured" if self.bea_api_key else None,
         }
 
@@ -92,6 +94,7 @@ def load_settings(
         "HISTORICAL_START": "1952Q4",
         "HISTORICAL_END": "1998Q3",
         "WRDS_USERNAME": None,
+        "WRDS_PASSWORD": None,
         "BEA_API_KEY": None,
     }
 
@@ -115,6 +118,7 @@ def load_settings(
         historical_start=str(value("HISTORICAL_START")),
         historical_end=str(value("HISTORICAL_END")),
         wrds_username=value("WRDS_USERNAME"),
+        wrds_password=value("WRDS_PASSWORD"),
         bea_api_key=value("BEA_API_KEY"),
     )
 

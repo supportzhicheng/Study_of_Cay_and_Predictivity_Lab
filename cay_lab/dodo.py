@@ -16,12 +16,21 @@ Usage:
     doit -f cay_lab/dodo.py generate_extension_exhibits
     doit -f cay_lab/dodo.py generate_combined_report
     doit -f cay_lab/dodo.py chartbook --dataset wealth_groups
+Legacy chartbook example:
+    doit -f cay_lab/dodo.py chartbook \
+      --sub-category house_wealth_groups \
+      --start 1990Q1 \
+      --end 2020Q4 \
+      --prediction-window 1 \
+      --risky-ticker SPY
 """
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -62,6 +71,124 @@ from cay_lab.analysis.predictive_regression import PredictiveRegression  # noqa:
 from cay_lab.data.loader import prepare_predictivity_dataset  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "cay_lab" / "output"
+SUB_CATEGORY_DATASET_MAP = {
+    "asset_wealth": "households_and_nonprofits",
+    "region": "region_proxy",
+    "house_wealth_groups": "wealth_groups",
+}
+VALID_DATASETS = {
+    "households",
+    "households_and_nonprofits",
+    "wealth_groups",
+    "region_proxy",
+}
+
+
+def _normalize_choice(value: str) -> str:
+    return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _resolve_dataset_key(dataset: str, sub_category: str | None) -> str:
+    if sub_category:
+        normalized_sub_category = _normalize_choice(sub_category)
+        if normalized_sub_category not in SUB_CATEGORY_DATASET_MAP:
+            valid = ", ".join(sorted(SUB_CATEGORY_DATASET_MAP))
+            raise ValueError(
+                f"Unknown sub_category '{sub_category}'. Valid options: {valid}"
+            )
+        return SUB_CATEGORY_DATASET_MAP[normalized_sub_category]
+
+    normalized_dataset = _normalize_choice(dataset)
+    if normalized_dataset not in VALID_DATASETS:
+        valid = ", ".join(sorted(VALID_DATASETS))
+        raise ValueError(f"Unknown dataset '{dataset}'. Valid options: {valid}")
+    return normalized_dataset
+
+
+def _validate_period_bounds(start: str | None, end: str | None) -> None:
+    if start is None or end is None:
+        return
+    start_period = pd.Period(start, freq="Q")
+    end_period = pd.Period(end, freq="Q")
+    if start_period > end_period:
+        raise ValueError(
+            f"Invalid sample period: start ({start}) must be <= end ({end})."
+        )
+
+
+def _fetch_risky_asset_quarterly_prices(
+    ticker: str,
+    start: str | None,
+    end: str | None,
+    data_source: str,
+) -> pd.Series:
+    from pandas_datareader import data as web
+
+    ticker_clean = ticker.strip().upper()
+    if not ticker_clean:
+        raise ValueError("risky_ticker must not be empty when provided.")
+
+    start_ts = pd.Period(start, freq="Q").to_timestamp(how="start") if start else None
+    end_ts = pd.Period(end, freq="Q").to_timestamp(how="end") if end else None
+    raw_prices = web.DataReader(
+        ticker_clean,
+        data_source,
+        start=start_ts,
+        end=end_ts,
+    )
+    if raw_prices.empty:
+        raise RuntimeError(
+            f"No market data returned for ticker '{ticker_clean}' from '{data_source}'."
+        )
+    if not isinstance(raw_prices.index, pd.DatetimeIndex):
+        raise RuntimeError(
+            f"Market data index for ticker '{ticker_clean}' is not DatetimeIndex."
+        )
+
+    raw_prices = raw_prices.sort_index()
+    price_col = next(
+        (col for col in ("Adj Close", "Close", "close") if col in raw_prices.columns),
+        None,
+    )
+    if price_col is None:
+        available_cols = ", ".join(str(c) for c in raw_prices.columns)
+        raise RuntimeError(
+            f"Market data for ticker '{ticker_clean}' is missing a close price column. "
+            f"Available columns: {available_cols}"
+        )
+
+    quarterly_prices = (
+        pd.to_numeric(raw_prices[price_col], errors="coerce")
+        .dropna()
+        .resample("QE-DEC")
+        .last()
+        .dropna()
+    )
+    if quarterly_prices.empty:
+        raise RuntimeError(
+            f"Quarterly close prices are empty for ticker '{ticker_clean}' "
+            f"from source '{data_source}'."
+        )
+    quarterly_prices.index = quarterly_prices.index.to_period("Q")
+    quarterly_prices.name = "risky_asset_price"
+    return quarterly_prices
+
+
+def _build_risky_asset_target(
+    quarterly_prices: pd.Series,
+    prediction_window: int,
+) -> pd.DataFrame:
+    if prediction_window <= 0:
+        raise ValueError("prediction_window must be positive.")
+    if not isinstance(quarterly_prices.index, pd.PeriodIndex):
+        raise ValueError("quarterly_prices must be indexed by a quarterly PeriodIndex.")
+    target = np.log(quarterly_prices.shift(-prediction_window)) - np.log(quarterly_prices)
+    return pd.DataFrame(
+        {
+            "risky_asset_price": quarterly_prices,
+            "target_risky_return": target,
+        }
+    )
 
 
 def _classify_status(max_abs_t: float, t_active: float = 1.96, t_weak: float = 1.28) -> str:
@@ -121,15 +248,52 @@ def _rolling_predictivity(
     return pd.DataFrame(rows)
 
 
+def _segment_predictivity_tests(
+    df: pd.DataFrame,
+    predictor_cols: list[str],
+    target_col: str,
+) -> pd.DataFrame:
+    rows: list[dict] = []
+    for segment, seg_df in df.groupby("segment", sort=True):
+        seg_df = seg_df.sort_index()
+        reg = PredictiveRegression(
+            seg_df,
+            target_col=target_col,
+            predictor_cols=predictor_cols,
+            horizon=0,
+        )
+        reg.fit()
+        t_stats = {col: float(reg.t_stat(col)) for col in predictor_cols}
+        max_abs_t = max(abs(v) for v in t_stats.values())
+        row = {
+            "segment": segment,
+            "r_squared": float(reg.r_squared()),
+            "n_obs": int(reg.result_.nobs),
+            "status": _classify_status(max_abs_t),
+            "target_col": target_col,
+        }
+        for col in predictor_cols:
+            row[f"coef_{col}"] = float(reg.result_.params[col])
+            row[f"t_stat_{col}"] = t_stats[col]
+            row[f"p_value_{col}"] = float(reg.result_.pvalues[col])
+        rows.append(row)
+    return pd.DataFrame(rows).sort_values("segment").reset_index(drop=True)
+
+
 def _write_chartbook(
     prepared_df: pd.DataFrame,
     rolling_df: pd.DataFrame,
     predictor_cols: list[str],
     pdf_path: Path,
+    sub_category: str | None,
     dataset: str,
     train_periods: int,
     prediction_window: int,
     target_component: str,
+    target_label: str,
+    start: str | None,
+    end: str | None,
+    risky_ticker: str | None,
 ) -> None:
     with PdfPages(pdf_path) as pdf:
         fig, ax = plt.subplots(figsize=(11, 8.5))
@@ -137,10 +301,14 @@ def _write_chartbook(
         summary_lines = [
             "Sub-CAY Predictivity Chartbook",
             "",
+            f"Sub-category: {sub_category or 'custom dataset selection'}",
             f"Dataset: {dataset}",
+            f"Sample period: {start or 'beginning'} to {end or 'latest'}",
             f"Training window (quarters): {train_periods}",
             f"Prediction horizon (quarters): {prediction_window}",
             f"Target component: {target_component}",
+            f"Target series: {target_label}",
+            f"Risky asset ticker: {risky_ticker or '(not used)'}",
             f"Predictors: {', '.join(predictor_cols)}",
             "",
             f"Prepared observations: {len(prepared_df):,}",
@@ -163,7 +331,7 @@ def _write_chartbook(
             # Actual vs predicted
             axes[0, 0].plot(seg["quarter_idx"], seg["actual"], label="Actual", linewidth=1.6)
             axes[0, 0].plot(seg["quarter_idx"], seg["prediction"], label="Predicted", linewidth=1.2)
-            axes[0, 0].set_title("Future growth: actual vs predicted")
+            axes[0, 0].set_title(f"{target_label}: actual vs predicted")
             axes[0, 0].legend(fontsize=8)
             axes[0, 0].grid(alpha=0.3)
 
@@ -198,35 +366,79 @@ def _write_chartbook(
 
 
 def build_chartbook(
+    sub_category: str = "house_wealth_groups",
     dataset: str = "wealth_groups",
     train_periods: int = 40,
     prediction_window: int = 1,
     target_component: str = "financial",
     output_dir: str = str(DEFAULT_OUTPUT_DIR),
     min_history_periods: int = 8,
+    start: str = "",
+    end: str = "",
+    risky_ticker: str = "",
+    risky_data_source: str = "stooq",
 ) -> None:
     """Create model outputs and a PDF chartbook for sub-cay predictivity."""
+    sub_category = sub_category or None
+    start = start or None
+    end = end or None
+    risky_ticker = risky_ticker.strip().upper()
+
+    dataset_key = _resolve_dataset_key(dataset=dataset, sub_category=sub_category)
+    _validate_period_bounds(start=start, end=end)
+
     out_dir = Path(output_dir)
     if not out_dir.is_absolute():
         out_dir = PROJECT_ROOT / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     prepared = prepare_predictivity_dataset(
-        dataset=dataset,
+        dataset=dataset_key,
         train_periods=train_periods,
         prediction_window=prediction_window,
         target_component=target_component,
         min_history_periods=min_history_periods,
+        start=start,
+        end=end,
     ).copy()
+    target_col = "target_future_growth"
+    target_label = f"{target_component} future log growth"
+    if risky_ticker:
+        risky_prices = _fetch_risky_asset_quarterly_prices(
+            ticker=risky_ticker,
+            start=start,
+            end=end,
+            data_source=risky_data_source,
+        )
+        risky_target = _build_risky_asset_target(
+            quarterly_prices=risky_prices,
+            prediction_window=prediction_window,
+        )
+        prepared = prepared.join(risky_target, how="inner")
+        prepared = prepared.dropna(subset=["target_risky_return"])
+        target_col = "target_risky_return"
+        target_label = f"{risky_ticker} future log return"
+    if prepared.empty:
+        raise RuntimeError(
+            "No prepared observations remain after applying sample and target filters."
+        )
 
     predictor_cols = [c for c in prepared.columns if c.startswith("sub_cay_")]
     if not predictor_cols:
         raise RuntimeError("No sub-cay predictor columns found in prepared dataset.")
 
+    tests = _segment_predictivity_tests(
+        prepared,
+        predictor_cols=predictor_cols,
+        target_col=target_col,
+    )
+    if tests.empty:
+        raise RuntimeError("No segment-level predictive regression tests were produced.")
+
     rolling = _rolling_predictivity(
         prepared,
         predictor_cols=predictor_cols,
-        target_col="target_future_growth",
+        target_col=target_col,
         train_periods=train_periods,
     )
     if rolling.empty:
@@ -236,6 +448,7 @@ def build_chartbook(
         )
 
     prepared_out = out_dir / "subcay_predictivity_prepared.csv"
+    tests_out = out_dir / "subcay_predictivity_tests.csv"
     rolling_out = out_dir / "subcay_predictivity_rolling.csv"
     pdf_out = out_dir / "chartbook_subcay_predictivity.pdf"
 
@@ -243,6 +456,7 @@ def build_chartbook(
     prepared_to_save.index = prepared_to_save.index.astype(str)
     prepared_to_save.index.name = "quarter"
     prepared_to_save.to_csv(prepared_out)
+    tests.to_csv(tests_out, index=False)
     rolling.to_csv(rolling_out, index=False)
 
     _write_chartbook(
@@ -250,10 +464,15 @@ def build_chartbook(
         rolling_df=rolling,
         predictor_cols=predictor_cols,
         pdf_path=pdf_out,
-        dataset=dataset,
+        sub_category=sub_category,
+        dataset=dataset_key,
         train_periods=train_periods,
         prediction_window=prediction_window,
         target_component=target_component,
+        target_label=target_label,
+        start=start,
+        end=end,
+        risky_ticker=risky_ticker or None,
     )
 
 
@@ -261,6 +480,7 @@ def task_chartbook():
     """Generate a sub-cay predictivity chartbook (CSV + PDF)."""
     targets = [
         str(DEFAULT_OUTPUT_DIR / "subcay_predictivity_prepared.csv"),
+        str(DEFAULT_OUTPUT_DIR / "subcay_predictivity_tests.csv"),
         str(DEFAULT_OUTPUT_DIR / "subcay_predictivity_rolling.csv"),
         str(DEFAULT_OUTPUT_DIR / "chartbook_subcay_predictivity.pdf"),
     ]
@@ -269,11 +489,24 @@ def task_chartbook():
         "targets": targets,
         "params": [
             {
+                "name": "sub_category",
+                "long": "sub-category",
+                "default": "house_wealth_groups",
+                "type": str,
+                "help": (
+                    "User-facing CAY sub-category: "
+                    "asset_wealth, region, house_wealth_groups"
+                ),
+            },
+            {
                 "name": "dataset",
                 "long": "dataset",
                 "default": "wealth_groups",
                 "type": str,
-                "help": "Dataset key: households, households_and_nonprofits, wealth_groups, region_proxy",
+                "help": (
+                    "Dataset key override: households, households_and_nonprofits, "
+                    "wealth_groups, region_proxy"
+                ),
             },
             {
                 "name": "train_periods",
@@ -290,11 +523,43 @@ def task_chartbook():
                 "help": "Prediction horizon in quarters",
             },
             {
+                "name": "start",
+                "long": "start",
+                "default": "",
+                "type": str,
+                "help": "Sample start quarter (e.g., 1990Q1). Leave empty for full span.",
+            },
+            {
+                "name": "end",
+                "long": "end",
+                "default": "",
+                "type": str,
+                "help": "Sample end quarter (e.g., 2020Q4). Leave empty for full span.",
+            },
+            {
                 "name": "target_component",
                 "long": "target-component",
                 "default": "financial",
                 "type": str,
                 "help": "Target component: housing, financial, liquid",
+            },
+            {
+                "name": "risky_ticker",
+                "long": "risky-ticker",
+                "default": "",
+                "type": str,
+                "help": (
+                    "Risky asset ticker (e.g., SPY). "
+                    "When set, predictivity target switches to this asset's "
+                    "future quarterly log return."
+                ),
+            },
+            {
+                "name": "risky_data_source",
+                "long": "risky-data-source",
+                "default": "stooq",
+                "type": str,
+                "help": "pandas-datareader source for risky ticker data (default: stooq)",
             },
             {
                 "name": "output_dir",

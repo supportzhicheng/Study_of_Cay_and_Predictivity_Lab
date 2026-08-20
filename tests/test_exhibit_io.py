@@ -41,3 +41,12 @@ def test_figure_writer_creates_pdf_png_and_wrapper(tmp_path: Path):
     assert "figure_test.pdf" in wrapper
     assert r"\FigureTestCaption" in wrapper
     assert "fig:figure_test" in wrapper
+
+
+def test_table_writer_escapes_latex_special_characters(tmp_path: Path):
+    table = pd.DataFrame({"sp_excess_return": [0.01]})
+
+    artifacts = write_table_artifacts(table, tmp_path, "table_escape_test")
+
+    tex = artifacts.tex.read_text(encoding="utf-8")
+    assert "sp\\_excess\\_return" in tex

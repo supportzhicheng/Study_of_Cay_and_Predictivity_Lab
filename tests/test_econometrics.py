@@ -108,6 +108,25 @@ def test_forecast_slope_is_invariant_to_predictor_intercept_shift():
     assert original.coefficients["cay"] == pytest.approx(shifted.coefficients["cay"])
 
 
+def test_hac_regression_accepts_nullable_float_dtypes():
+    index = pd.period_range("2000Q1", periods=12, freq="Q")
+    predictor = pd.Series(
+        np.linspace(-1.0, 1.0, len(index)),
+        index=index,
+        name="cay",
+        dtype="Float64",
+    )
+    outcome = pd.Series(
+        0.2 + 0.8 * predictor.astype(float),
+        index=index,
+        name="return",
+        dtype="Float64",
+    )
+
+    result = run_hac_regression(outcome, predictor.to_frame(), horizon=1, hac_lags=0)
+    assert result.coefficients["cay"] == pytest.approx(0.8, abs=1e-6)
+
+
 def test_candidate_scoring_uses_scaled_error_and_declared_tie_break():
     selection = select_convention(
         {

@@ -82,6 +82,30 @@ def test_caption_macro_names_use_only_control_word_letters(artifact_id, expected
     assert caption_macro_name(artifact_id) == expected
 
 
+def test_caption_macro_name_replaces_digits_for_latex_command_safety():
+    assert caption_macro_name("figure_1_replication") == "FigureOneReplicationCaption"
+
+
+def test_caption_generation_escapes_latex_special_characters(tmp_path: Path):
+    captions = tmp_path / "captions.yml"
+    captions.write_text(
+        "table_test:\n  title: S&P summary\n  label: tab:test\n  takeaway: Uses a_b and {check}\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "generated_captions.tex"
+    write_caption_macros(
+        captions,
+        output,
+        sample_dates={"table_test": ("1952Q4", "1998Q3")},
+        data_vintage="2026-08-18",
+        calculated_takeaways={},
+    )
+    text = output.read_text(encoding="utf-8")
+    assert r"S\&P" in text
+    assert r"a\_b" in text
+    assert r"\{check\}" in text
+
+
 def test_replication_status_uses_worst_check(tmp_path: Path):
     audit = pd.DataFrame({"status": [PASS_STRICT, PASS_REVISED_VINTAGE]})
 

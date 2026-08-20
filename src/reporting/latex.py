@@ -25,6 +25,7 @@ def compile_latex_report(reports_dir: Path) -> Path:
         command = [
             latexmk,
             "-pdf",
+            "-g",
             "-interaction=nonstopmode",
             "-halt-on-error",
             f"-outdir={build_dir.resolve()}",

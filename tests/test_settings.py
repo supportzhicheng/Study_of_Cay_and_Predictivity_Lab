@@ -68,15 +68,21 @@ def test_directory_creation_is_explicit(tmp_path: Path):
 def test_public_summary_redacts_credentials(tmp_path: Path):
     settings = load_settings(
         argv=[],
-        environ={"WRDS_USERNAME": "researcher", "BEA_API_KEY": "secret-key"},
+        environ={
+            "WRDS_USERNAME": "researcher",
+            "WRDS_PASSWORD": "password",
+            "BEA_API_KEY": "secret-key",
+        },
         project_root=tmp_path,
     )
 
     summary = settings.public_summary()
 
     assert summary["WRDS_USERNAME"] == "configured"
+    assert summary["WRDS_PASSWORD"] == "configured"
     assert summary["BEA_API_KEY"] == "configured"
     assert "researcher" not in summary.values()
+    assert "password" not in summary.values()
     assert "secret-key" not in summary.values()
 
 
@@ -91,6 +97,7 @@ def test_env_example_contains_placeholders_only():
             values[key] = value
 
     assert values["WRDS_USERNAME"] == ""
+    assert values["WRDS_PASSWORD"] == ""
     assert values["BEA_API_KEY"] == ""
 
 
