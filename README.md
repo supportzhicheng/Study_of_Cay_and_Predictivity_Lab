@@ -136,7 +136,6 @@ ruff format --check .
 git diff --check
 doit list
 doit compile_report
-doit compile_report
 ```
 
 The final report gate also checks compact publication tables, appendix
