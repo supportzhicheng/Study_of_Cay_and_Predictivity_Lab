@@ -34,6 +34,7 @@ The repository has two deliberately separate workstreams:
 mamba env create -f environment.yml
 mamba activate cay
 cp .env.example .env
+python -m pip install -e .
 ```
 
 Update an existing environment after the manifest changes with:
@@ -45,6 +46,20 @@ mamba env update -n cay -f environment.yml --prune
 Keep `WRDS_USERNAME` and `BEA_API_KEY` in `.env`. Keep the WRDS password in
 the user PostgreSQL password file. Raw licensed data, local reference files,
 and generated artifacts are ignored by Git.
+
+Run this quick preflight before reproducing Section 9:
+
+```bash
+python - <<'PY'
+mods = [
+    "doit", "numpy", "pandas", "statsmodels", "matplotlib",
+    "pandas_datareader", "yfinance", "pyarrow", "yaml", "requests"
+]
+for m in mods:
+    __import__(m)
+print("Dependency preflight OK.")
+PY
+```
 
 PDF report compilation additionally requires either Tectonic or a TeX
 distribution that provides the `latexmk` and `pdflatex` command-line
@@ -158,8 +173,8 @@ If you are new to the repo, follow this exact sequence:
    ```
 2. **(Optional) Rebuild decomposition data files**
    ```bash
-   /usr/bin/python3 cay_data/build_components_from_s14.py
-   /usr/bin/python3 cay_data/build_extension_data.py
+   python cay_data/build_components_from_s14.py
+   python cay_data/build_extension_data.py
    ```
 3. **Run tests**
    ```bash
@@ -296,9 +311,17 @@ Local files are expected under `cay_data/`.
 From repository root:
 
 ```bash
-/usr/bin/python3 cay_data/build_components_from_s14.py
-/usr/bin/python3 cay_data/build_extension_data.py
+python cay_data/build_components_from_s14.py
+python cay_data/build_extension_data.py
 ```
+
+`build_components_from_s14.py` requires these user-provided raw inputs:
+
+- `cay_data/raw/FRB_Z1_S14_b_Q.csv`
+- `cay_data/raw/FRB_Z1_S1M_b_Q.csv`
+
+If either file is missing, download the corresponding Z.1 CSV extracts with
+your own access/credentials and place them under `cay_data/raw/`.
 
 Raw downloaded inputs are stored in `cay_data/raw/` for reproducibility.
 
