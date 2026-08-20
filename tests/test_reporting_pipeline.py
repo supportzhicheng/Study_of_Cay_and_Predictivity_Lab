@@ -1,4 +1,4 @@
-"""Integration test for the complete 32-artifact report build."""
+"""Integration test for the complete report artifact build."""
 
 import json
 import shutil
@@ -47,13 +47,17 @@ def report_panel(periods: int = 210) -> pd.DataFrame:
     )
 
 
-def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
+def test_complete_report_pipeline_writes_registered_artifacts(tmp_path: Path):
     reports_dir = tmp_path / "reports"
     shutil.copytree(PROJECT_ROOT / "reports", reports_dir)
     targets_dir = tmp_path / "config"
     targets_dir.mkdir()
     targets_path = targets_dir / "paper_targets.yml"
     shutil.copy2(PROJECT_ROOT / "config" / "paper_targets.yml", targets_path)
+    shutil.copy2(
+        PROJECT_ROOT / "config" / "extension_sources.yml",
+        targets_dir / "extension_sources.yml",
+    )
     processed_dir = tmp_path / "_data" / "processed"
     processed_dir.mkdir(parents=True)
     panel_path = processed_dir / "core_quarterly.parquet"
@@ -72,30 +76,89 @@ def test_complete_report_pipeline_writes_exactly_32_artifacts(tmp_path: Path):
         git_commit="test-commit",
     )
 
-    assert len(artifacts) == 32
-    assert len({path.resolve() for path in artifacts}) == 32
+    assert len(artifacts) >= 33
+    assert len({path.resolve() for path in artifacts}) == len(artifacts)
     assert all(path.exists() and path.stat().st_size > 0 for path in artifacts)
-    assert len(list((reports_dir / "tables").glob("*"))) == 16
+    assert (
+        len([path for path in (reports_dir / "tables").glob("*") if path.is_file()])
+        == 16
+    )
     assert len(list((reports_dir / "figures").glob("*"))) == 9
+    assert (reports_dir / "paper" / "generated" / "appendix_tables.tex").exists()
+    assert len(list((reports_dir / "tables" / "appendix").glob("*.tex"))) == 5
+    for tex_path in (reports_dir / "tables").glob("*.tex"):
+        assert "NaN" not in tex_path.read_text(encoding="utf-8")
+        assert r"\resizebox{\textwidth}{!}" in tex_path.read_text(encoding="utf-8")
+
+    table_2 = pd.read_csv(reports_dir / "tables" / "table_iii_replication.csv")
+    table_5 = pd.read_csv(reports_dir / "tables" / "table_iii_updated.csv")
+    table_3 = pd.read_csv(reports_dir / "tables" / "table_vi_replication.csv")
+    table_6 = pd.read_csv(reports_dir / "tables" / "table_vi_updated.csv")
+    assert table_2["Model"].tolist() == list(range(1, 14))
+    assert table_5["Model"].tolist() == [2, 4, 6, 8, 13]
+    assert len(table_3) == len(table_6) == 16
 
     manifest = json.loads(
         (reports_dir / "build" / "artifact_manifest.json").read_text(encoding="utf-8")
     )
     required_dependencies = {
-        str(panel_path),
-        str(panel_metadata_path),
-        str(reports_dir / "captions.yml"),
+        str(panel_path.relative_to(tmp_path)),
+        str(panel_metadata_path.relative_to(tmp_path)),
+        "reports/report_contract.yml",
     }
     assert all(
         required_dependencies <= set(entry["source_dependencies"])
         for entry in manifest["artifacts"]
     )
 
-    table_iii = pd.read_csv(reports_dir / "tables" / "table_iii_updated.csv")
-    actual_endpoint = table_iii["sample_end"].max()
+    report_metadata = json.loads(
+        (reports_dir / "build" / "report_metadata.json").read_text(encoding="utf-8")
+    )
+    actual_endpoint = report_metadata["updated_latest_common_quarter"]
     captions = (
         reports_dir / "paper" / "generated" / "generated_captions.tex"
     ).read_text(encoding="utf-8")
     assert actual_endpoint in captions
     assert "most persistent updated predictor" in captions
     assert "requiring diagnosis" in captions
+    findings = (
+        reports_dir / "paper" / "generated" / "empirical_findings.tex"
+    ).read_text(encoding="utf-8")
+    for macro in (
+        "HistoricalSummaryFinding",
+        "HistoricalFigureFinding",
+        "HistoricalShortHorizonFinding",
+        "HistoricalLongHorizonFinding",
+        "UpdatedSummaryFinding",
+        "UpdatedFigureFinding",
+        "UpdatedShortHorizonFinding",
+        "UpdatedLongHorizonFinding",
+        "DataCoverageFinding",
+        "DataAnatomyFinding",
+    ):
+        assert rf"\newcommand{{\{macro}}}" in findings
+
+    diagnostics = json.loads(
+        (reports_dir / "build" / "table_iii_source_diagnostics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert diagnostics["selected"] == {
+        "risk_free": "bill_30d",
+        "term_spread": "term_10y_3m",
+    }
+    assert diagnostics["row_13"] == {
+        "sample_start": "1953Q2",
+        "observations": 181,
+        "hac_lags": 1,
+    }
+    assert diagnostics["table_vi_hac_lags"] == {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "4": 3,
+        "8": 7,
+        "12": 11,
+        "16": 15,
+        "24": 23,
+    }

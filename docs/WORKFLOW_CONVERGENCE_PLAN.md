@@ -1,6 +1,19 @@
 # Unified Workflow, Data, Replication, and Report Plan
 
-**Status:** Proposed implementation plan and sole source of truth
+**Status:** Implemented through Phases 0--5; exact Section 9 baseline bundle remains externally blocked
+
+Implementation commits:
+
+1. `7a63764` -- stabilize migration baselines and tests.
+2. `5eb220e` -- fix historical replication methods.
+3. `47f85fc` -- unify extension code and workflow.
+4. `980e19e` -- unify extension data contracts.
+5. `427865c` -- rebuild publication report artifacts.
+
+The regional baseline and complete report workflow pass. Exact Section 9
+baseline reproduction still requires the pinned QQQ bytes documented in
+`docs/BASELINE_BUNDLE_STATUS.md`; baseline mode rejects the available revised
+cache rather than silently substituting it.
 
 ## 1. Goal and Decisions
 
@@ -243,6 +256,7 @@ Verified corrections:
 relative_bill_rate = (
     nominal_rate - nominal_rate.shift(1).rolling(4, min_periods=4).mean()
 )
+
 
 def newey_west_lags(observations: int, horizon: int) -> int:
     return max(1, horizon - 1)

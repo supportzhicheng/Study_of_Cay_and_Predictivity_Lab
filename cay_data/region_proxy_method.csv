@@ -1,5 +1,0 @@
-dimension,method,source
-housing,"Within-CA/IL/TX share = population share x (state HPI / US HPI), then normalized","FRED CASTHPI, ILSTHPI, TXSTHPI, USSTHPI; CAPOP, ILPOP, TXPOP"
-financial,Within-CA/IL/TX share = state estimated personal income share (PCPI x population),"FRED CAPCPI, ILPCPI, TXPCPI; CAPOP, ILPOP, TXPOP"
-liquid,Within-CA/IL/TX share = financial share (income-based) in this build; optional FDIC deposit override supported via fdic_state_deposits_annual_ca_il_tx.csv,"FRED CAPCPI, ILPCPI, TXPCPI; CAPOP, ILPOP, TXPOP"
-scaled proxies,State proxy levels scale national HNPO quarterly components by within-three-state shares for comparative analysis,National base: cay_components_hnpo_q.csv

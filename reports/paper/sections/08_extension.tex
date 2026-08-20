@@ -6,9 +6,9 @@ $cay$ with a regional-proxy construction, $cay_R$, from
 \texttt{cay\_components\_region\_ca\_il\_tx\_q\_proxy.csv}. All downstream
 forecasting specifications remain unchanged.
 
-\IfFileExists{../../cay_lab/output/reports/combined_replication_extension.tex}{
-  \input{../../cay_lab/output/reports/combined_replication_extension.tex}
+\IfFileExists{generated/extension_report.tex}{
+  \input{generated/extension_report.tex}
 }{
   \textbf{Extension results not built.} Run:
-  \texttt{doit -f cay\_lab/dodo.py generate\_combined\_report}
+  \texttt{doit extension\_region\_report}
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -12,8 +13,13 @@ def compile_latex_report(reports_dir: Path) -> Path:
     build_dir = reports_dir / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
     log_path = build_dir / "latex_build.log"
+    environment_bin = Path(sys.executable).resolve().parent
     latexmk = shutil.which("latexmk")
     tectonic = shutil.which("tectonic")
+    if latexmk is None and (environment_bin / "latexmk").exists():
+        latexmk = str(environment_bin / "latexmk")
+    if tectonic is None and (environment_bin / "tectonic").exists():
+        tectonic = str(environment_bin / "tectonic")
     if latexmk is None and tectonic is None:
         message = (
             "No LaTeX compiler is installed. Install a TeX distribution with "

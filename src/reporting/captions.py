@@ -54,12 +54,14 @@ def write_caption_macros(
     calculated_takeaways: Mapping[str, str],
 ) -> Path:
     """Validate caption fields and write one macro per registered exhibit."""
-    entries = yaml.safe_load(captions_path.read_text(encoding="utf-8"))
+    contract = yaml.safe_load(captions_path.read_text(encoding="utf-8"))
+    entries = contract.get("exhibits", {})
     lines = []
-    for artifact_id, entry in entries.items():
+    for artifact_id in sample_dates:
+        entry = entries.get(artifact_id, {})
         title = entry.get("title")
         label = entry.get("label")
-        takeaway = calculated_takeaways.get(artifact_id) or entry.get("takeaway")
+        takeaway = calculated_takeaways.get(artifact_id)
         if not title or not label or not takeaway:
             raise ValueError(
                 f"Caption '{artifact_id}' lacks title, label, or takeaway."
@@ -68,12 +70,11 @@ def write_caption_macros(
             raise ValueError(f"Caption '{artifact_id}' lacks generated sample dates.")
         sample = sample_dates[artifact_id]
         sample_text = sample if isinstance(sample, str) else "--".join(sample)
-        source = entry.get(
-            "source", "Generated from the normalized core quarterly panel"
-        )
-        notes = "; ".join(entry.get("notes_required", []))
+        source = entry.get("source_note")
+        if not source:
+            raise ValueError(f"Caption '{artifact_id}' lacks an explicit source note.")
         caption = (
-            f"{title}. Sample: {sample_text}. {notes}. "
+            f"{title}. Sample: {sample_text}. "
             f"Data vintage: {data_vintage}. Source: {source}. {takeaway}"
         )
         caption = _escape_latex(re.sub(r"\s+", " ", caption))

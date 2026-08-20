@@ -129,10 +129,9 @@ def build_crsp_market(
 
 
 def relative_bill_rate(nominal_rate: pd.Series) -> pd.Series:
-    """Subtract the trailing four-quarter mean, including the current rate."""
-    return (nominal_rate - nominal_rate.rolling(4, min_periods=4).mean()).rename(
-        nominal_rate.name
-    )
+    """Subtract the prior four-quarter mean from the current nominal rate."""
+    prior_mean = nominal_rate.shift(1).rolling(4, min_periods=4).mean()
+    return (nominal_rate - prior_mean).rename(nominal_rate.name)
 
 
 def build_rates(

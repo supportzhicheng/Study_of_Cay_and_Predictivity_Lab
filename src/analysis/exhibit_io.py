@@ -35,7 +35,7 @@ def write_table_artifacts(
     csv_path = output_dir / f"{artifact_id}.csv"
     tex_path = output_dir / f"{artifact_id}.tex"
     table.to_csv(csv_path, index=False)
-    tabular = table.to_latex(index=False, escape=True)
+    tabular = table.to_latex(index=False, escape=True, na_rep="")
     if caption_macro and label:
         tabular = "\n".join(
             [
@@ -43,7 +43,10 @@ def write_table_artifacts(
                 r"\centering",
                 rf"\caption{{\{caption_macro}}}",
                 rf"\label{{{label}}}",
+                r"\small",
+                r"\resizebox{\textwidth}{!}{%",
                 tabular,
+                r"}",
                 r"\end{table}",
                 "",
             ]

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from cay_lab.analysis.cay_builder import CayBuilder
-from cay_lab.data.loader import make_synthetic_dataset
+from src.analysis.cay_builder import CayBuilder
+from tests.synthetic import make_synthetic_dataset
 
 
 @pytest.fixture

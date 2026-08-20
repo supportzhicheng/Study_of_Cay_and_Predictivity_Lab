@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from cay_lab.analysis.cay_builder import CayBuilder
+from src.analysis.cay_builder import CayBuilder
 
 
 @dataclass(frozen=True)

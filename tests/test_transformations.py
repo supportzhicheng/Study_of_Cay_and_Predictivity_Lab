@@ -136,7 +136,7 @@ def test_quarterly_inflation_sums_monthly_log_changes():
     assert result.iloc[0] == pytest.approx(np.log(102.0 / 100.0))
 
 
-def test_rate_candidates_and_four_quarter_relative_rates():
+def test_rate_candidates_and_prior_four_quarter_relative_rates():
     index = pd.period_range("2000Q1", periods=5, freq="Q")
     fred = pd.DataFrame(
         {
@@ -153,8 +153,8 @@ def test_rate_candidates_and_four_quarter_relative_rates():
 
     result = build_rates(fred, inflation, nominal_30d)
 
-    assert result["relative_bill_rate_30d"].iloc[:3].isna().all()
-    assert result["relative_bill_rate_30d"].iloc[3] == pytest.approx(0.0015)
+    assert result["relative_bill_rate_30d"].iloc[:4].isna().all()
+    assert result["relative_bill_rate_30d"].iloc[4] == pytest.approx(0.0025)
     assert result["term_spread_10y_3m"].iloc[0] == pytest.approx(0.03)
     assert result["term_spread_10y_1y"].iloc[0] == pytest.approx(0.02)
     assert result["default_spread"].iloc[0] == pytest.approx(0.02)

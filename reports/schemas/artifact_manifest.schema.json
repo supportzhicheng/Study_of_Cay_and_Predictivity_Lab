@@ -10,11 +10,15 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "path", "sha256", "source_dependencies"],
+        "required": ["id", "path", "sha256", "source_ids", "source_dependencies"],
         "properties": {
           "id": {"type": "string"},
           "path": {"type": "string"},
           "sha256": {"type": "string"},
+          "source_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
           "source_dependencies": {
             "type": "array",
             "items": {"type": "string"}

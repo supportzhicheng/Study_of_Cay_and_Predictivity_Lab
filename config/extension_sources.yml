@@ -1,9 +1,10 @@
-schema_version: 1
-tracked_raw_root: cay_data/raw
-status: blocked_pending_immutable_pinning
+schema_version: 2
+tracked_raw_root: _data/raw/extension
+acquisition_modes: [baseline, latest]
+status: baseline_requires_verified_local_bundle
 notes:
-  - Keep cay_data/raw tracked until the extension-source gate in docs/WORKFLOW_CONVERGENCE_PLAN.md passes.
-  - The tracked hashes below pin the current repository snapshots while immutable acquisition paths and ALFRED vintages are documented.
+  - Provider bytes are ignored; baseline mode imports matching files from EXTENSION_INPUT_DIR.
+  - Latest mode writes revised provider caches without changing these baseline hashes.
 sources:
   z1_s14_b:
     provider: Federal Reserve Z.1
@@ -11,7 +12,7 @@ sources:
     release_date: "2026-06"
     units: million_usd
     coverage: 1945Q4-2026Q1
-    tracked_file: cay_data/raw/FRB_Z1_S14_b_Q.csv
+    cache_path: _data/raw/extension/FRB_Z1_S14_b_Q.csv
     sha256: 967c481663c9d7338154fc92c5ccb0dec155223dea4d12490a84bd37721979b2
     immutable_archive: null
     current_import_location: local_tracked_csv
@@ -22,7 +23,7 @@ sources:
     release_date: "2026-06"
     units: million_usd
     coverage: 1945Q4-2026Q1
-    tracked_file: cay_data/raw/FRB_Z1_S1M_b_Q.csv
+    cache_path: _data/raw/extension/FRB_Z1_S1M_b_Q.csv
     sha256: 751291a66e349524d6bdbc5827e0a5f085c4c2340809d621f09da2fb00b44421
     immutable_archive: null
     current_import_location: local_tracked_csv
@@ -33,16 +34,16 @@ sources:
     units: million_usd
     coverage: quarterly_detail_extract
     url: https://www.federalreserve.gov/releases/z1/dataviz/download/zips/dfa.zip
-    tracked_file: cay_data/raw/dfa.zip
+    cache_path: _data/raw/extension/dfa.zip
     sha256: a7804fb240cb6153d6beb04335ac558cb4e0c5c2ba221eba7c41b9c62ce36274
     extracted_files:
-      - path: cay_data/raw/dfa-networth-levels-detail.csv
+      - path: _data/raw/extension/dfa-networth-levels-detail.csv
         sha256: 7bfc4fe8a2c4b71e38de04cce8b51d85680de1b961b9102a954c929f6678964d
-      - path: cay_data/raw/dfa-networth-levels.csv
+      - path: _data/raw/extension/dfa-networth-levels.csv
         sha256: bff6eb4aeca746e4885b2db343ee8a043af882e76dc7b8c68126ca5ebf520cda
-      - path: cay_data/raw/dfa-data-definitions.txt
+      - path: _data/raw/extension/dfa-data-definitions.txt
         sha256: c6a3d315f6b1d059669ef0bbabda48c188790f007d5d5360af4924a84a69680e
-      - path: cay_data/raw/dfa-general-levels-detail-dictionary.txt
+      - path: _data/raw/extension/dfa-general-levels-detail-dictionary.txt
         sha256: e06a88eecd54699519408bcfab288cfc56bdf66a2fac33d793a6b5f52e4729e3
     immutable_archive: null
     blocker: Replace the mutable latest-release URL with an immutable June 2026 archive location before Stage 1.
@@ -55,64 +56,66 @@ sources:
       CASTHPI:
         geography: CA
         measure: housing_price_index
-        tracked_file: cay_data/raw/fred_CASTHPI.csv
+        cache_path: _data/raw/extension/fred_CASTHPI.csv
         sha256: 16030df339baa278a09d78a19d145b1360b54cd175aa3105931a2209b995fc6f
       ILSTHPI:
         geography: IL
         measure: housing_price_index
-        tracked_file: cay_data/raw/fred_ILSTHPI.csv
+        cache_path: _data/raw/extension/fred_ILSTHPI.csv
         sha256: e1928f1e8916de252ca69889e30d3f6ff26b34a81381388426e83d95052920aa
       TXSTHPI:
         geography: TX
         measure: housing_price_index
-        tracked_file: cay_data/raw/fred_TXSTHPI.csv
+        cache_path: _data/raw/extension/fred_TXSTHPI.csv
         sha256: a2b6a4df958f957a0a6377871b2ee6e53ba8fd2f56462758db5eed1b74160ee4
       USSTHPI:
         geography: US
         measure: housing_price_index
-        tracked_file: cay_data/raw/fred_USSTHPI.csv
+        cache_path: _data/raw/extension/fred_USSTHPI.csv
         sha256: bce17ff502e58beb50d0d03cc4a3016e5db0d3c5b804f224edebee42f9a937d5
       CAPCPI:
         geography: CA
         measure: per_capita_personal_income
-        tracked_file: cay_data/raw/fred_CAPCPI.csv
+        cache_path: _data/raw/extension/fred_CAPCPI.csv
         sha256: b943e2aedaf43bba6eed10e495ff9e6b31cb6c53e87c3fc3cfb97e9dbcf7d6e0
       ILPCPI:
         geography: IL
         measure: per_capita_personal_income
-        tracked_file: cay_data/raw/fred_ILPCPI.csv
+        cache_path: _data/raw/extension/fred_ILPCPI.csv
         sha256: 7ed9445d95f198b5bbe369065b1b4cec3b8e69560398df08be0c03ca5cf50dad
       TXPCPI:
         geography: TX
         measure: per_capita_personal_income
-        tracked_file: cay_data/raw/fred_TXPCPI.csv
+        cache_path: _data/raw/extension/fred_TXPCPI.csv
         sha256: 41e11dac34b9c8caacd061b12c2bea17bfb821223a1c397201eb8f20ba55c82a
       CAPOP:
         geography: CA
         measure: population
-        tracked_file: cay_data/raw/fred_CAPOP.csv
+        cache_path: _data/raw/extension/fred_CAPOP.csv
         sha256: fa10df7be18598bd2f52269a0957965c50915be383920be0f9826420f8476f35
       ILPOP:
         geography: IL
         measure: population
-        tracked_file: cay_data/raw/fred_ILPOP.csv
+        cache_path: _data/raw/extension/fred_ILPOP.csv
         sha256: 2f48a37c714d7e88b0f4839a4e9a13892a9b9c0f528eb8d33cba671816a9fa5a
       TXPOP:
         geography: TX
         measure: population
-        tracked_file: cay_data/raw/fred_TXPOP.csv
+        cache_path: _data/raw/extension/fred_TXPOP.csv
         sha256: 08398c9d5210ed88f2dbb0a5770f759c43ec21a143c047df0549a39f94bdcade
+  qqq_market:
+    provider: Yahoo Finance
+    ticker: QQQ
+    measure: adjusted_close
+    units: usd_per_share
+    coverage: 2023-01-03--2026-04-01
+    rows: 814
+    cache_path: _data/raw/extension/market/QQQ.csv
+    sha256: ecbcf48746b1167b502d06fd07022f3f2ff7eff69fb89c4d4b08a8853c802bbb
+    blocker: Exact baseline bytes must be supplied through EXTENSION_INPUT_DIR.
   fdic_state_deposits:
     provider: FDIC Summary of Deposits
     enabled: false
     current_query_endpoint: https://banks.data.fdic.gov/api/sod
-    tracked_file: cay_data/raw/fdic_state_deposits_annual_ca_il_tx.csv
-    sha256: aa9c4a7c5d0efd606b786d329916eb57717920587bbf9c9a36a1f2ef8a14d346
-    blocker: Keep the unused helper disabled and do not switch regional rows away from income_share_fallback.
-supplemental_tracked_snapshots:
-  - tracked_file: cay_data/raw/FRB_Z1_OECD_620_Q_last5.csv
-    sha256: 95b95ece9bcb43a5bc2c9313dc5c9b1f8d9874983a9dbfde666bb34f89606f45
-    note: Tracked Z.1 snapshot awaiting source classification in the convergence manifest.
-  - tracked_file: cay_data/raw/FRB_Z1_S1M_e_b_Q.csv
-    sha256: 9b4277fc1b77545bb6cbf00ffba8f611363c25666e24f534cc452760c1cde6c3
-    note: Tracked Z.1 snapshot awaiting source classification in the convergence manifest.
+    required_source_file: false
+    method: income_share_fallback

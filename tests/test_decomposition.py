@@ -2,8 +2,8 @@
 
 import pytest
 
-from cay_lab.analysis.decomposition import CayDecomposer
-from cay_lab.data.loader import make_synthetic_dataset
+from src.extension.decomposition import CayDecomposer
+from tests.synthetic import make_synthetic_dataset
 
 
 @pytest.fixture

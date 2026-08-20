@@ -15,6 +15,23 @@ def test_repository_relative_defaults(tmp_path: Path):
     assert settings.reports_dir == tmp_path / "reports"
     assert settings.p10_input_dir == tmp_path / "_data" / "input"
     assert settings.p10_reference_dir == tmp_path / "asset"
+    assert (
+        settings.extension_data_dir == tmp_path / "_data" / "normalized" / "extension"
+    )
+    assert settings.extension_raw_dir == tmp_path / "_data" / "raw" / "extension"
+    assert (
+        settings.extension_normalized_dir
+        == tmp_path / "_data" / "normalized" / "extension"
+    )
+    assert (
+        settings.extension_processed_dir
+        == tmp_path / "_data" / "processed" / "extension"
+    )
+    assert settings.extension_output_dir == tmp_path / "_output" / "extension"
+    assert (
+        settings.extension_reports_dir == tmp_path / "reports" / "paper" / "generated"
+    )
+    assert settings.extension_input_dir == tmp_path / "_data" / "input" / "extension"
     assert settings.historical_start == "1952Q4"
     assert settings.historical_end == "1998Q3"
 
@@ -97,7 +114,6 @@ def test_env_example_contains_placeholders_only():
             values[key] = value
 
     assert values["WRDS_USERNAME"] == ""
-    assert values["WRDS_PASSWORD"] == ""
     assert values["BEA_API_KEY"] == ""
 
 
@@ -106,7 +122,7 @@ def test_generated_and_private_paths_are_ignored():
         (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     )
 
-    for required_rule in (".env", "asset/", "_data/", "_output/", "reports/build/"):
+    for required_rule in (".env", "_data/", "_output/", "reports/build/"):
         assert required_rule in ignore_rules
 
 

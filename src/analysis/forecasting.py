@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import pandas as pd
@@ -36,13 +35,12 @@ def forward_change(series: pd.Series, horizon: int) -> pd.Series:
 
 
 def newey_west_lags(observations: int, horizon: int) -> int:
-    """Return the automatic bandwidth, covering overlapping outcomes."""
+    """Return the paper-aligned bandwidth for overlapping outcomes."""
     if observations <= 0:
         raise ValueError("observations must be positive.")
     if horizon <= 0:
         raise ValueError("horizon must be positive.")
-    automatic = math.floor(4 * (observations / 100) ** (2 / 9))
-    return max(horizon - 1, automatic)
+    return max(1, horizon - 1)
 
 
 @dataclass(frozen=True)

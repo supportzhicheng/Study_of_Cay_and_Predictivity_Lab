@@ -32,6 +32,23 @@ and defines the reported predictor without subtracting the intercept:
 cay_t = c_t - 0.31a_t - 0.59y_t.
 \]
 
+\subsection{Return and Predictor Conventions}
+
+The historical return contract uses CRSP value-weighted market returns
+(\texttt{vwretd}) and CRSP 30-day Treasury-bill returns
+(\texttt{t30ret}). Monthly returns are transformed with
+$\log(1+r)$ and summed within each quarter. The relative bill rate is the
+current quarterly bill return minus the mean of the \emph{prior} four
+quarters, so the current observation does not enter its own benchmark. The
+term spread is the 10-year Treasury yield minus the 3-month Treasury yield.
+These definitions are fixed by source and timing rather than selected against
+the paper targets.
+
+Forecasting regressions use Newey--West HAC inference with
+$\max(1,h-1)$ lags at horizon $h$. One-quarter Table III regressions
+therefore use one lag; the Table VI lag sequence for horizons
+1, 2, 3, 4, 8, 12, 16, and 24 is 1, 1, 2, 3, 7, 11, 15, and 23.
+
 \subsection{Validation}
 
 The historical construction uses \CayHistoricalDefinition{} over

@@ -1,0 +1,18 @@
+\section{Our Product: CAY Lab}
+\label{sec:our_product}
+
+CAY Lab exposes decomposition choice, sample range, training window,
+predictive horizon, and risky-asset target while preserving the project's
+econometric definitions. The root workflow records those choices and consumes
+only declared data caches.
+
+\subsection{Worked Example: Wealth Groups and QQQ}
+
+The worked example uses Federal Reserve Distributional Financial Accounts
+wealth-group detail and a declared QQQ adjusted-close cache. It forecasts
+two-quarter QQQ log returns with an eight-quarter rolling training window for
+the bottom 50 percent, middle 40 percent, and top 10 percent wealth groups.
+The generated manifest records the segment, page, sample, target, label, and
+QQQ source hash for each figure.
+
+\input{generated/section9_figures}

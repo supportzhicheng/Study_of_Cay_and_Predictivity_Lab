@@ -21,6 +21,13 @@ from src.reporting.latex import compile_latex_report
 from src.settings import Settings, load_settings
 
 LOGGER = logging.getLogger(__name__)
+CORE_RAW_FILES = (
+    Path("fred/fred_inputs.parquet"),
+    Path("bea/bea_components.parquet"),
+    Path("shiller/shiller_monthly.parquet"),
+    Path("wrds/crsp_market_monthly.parquet"),
+    Path("wrds/crsp_treasury_monthly.parquet"),
+)
 
 
 def _run_step(name: str, action: Callable[[], Any]) -> Any:
@@ -53,8 +60,8 @@ def _pull_wrds(settings: Settings, raw_dir: Path) -> None:
         connection.close()
 
 
-def bootstrap_real_data(settings: Settings, *, compile_report: bool = False) -> None:
-    """Acquire real inputs, normalize, build, analyze, and optionally compile."""
+def acquire_core_data(settings: Settings) -> list[Path]:
+    """Acquire missing live core raw caches and return all required paths."""
     if not logging.getLogger().handlers:
         logging.basicConfig(
             level=logging.INFO,
@@ -62,24 +69,14 @@ def bootstrap_real_data(settings: Settings, *, compile_report: bool = False) -> 
             datefmt="%H:%M:%S",
         )
     LOGGER.setLevel(logging.INFO)
-    if not settings.wrds_username:
-        raise RuntimeError(
-            "WRDS_USERNAME is required for the CRSP source. Set it in .env and keep "
-            "the password in your PostgreSQL password file."
-        )
     settings.create_directories()
     raw_dir = settings.data_dir / "raw"
-    normalized_dir = settings.data_dir / "normalized"
     fred_raw = raw_dir / "fred" / "fred_inputs.parquet"
     bea_raw = raw_dir / "bea" / "bea_components.parquet"
     shiller_raw = raw_dir / "shiller" / "shiller_monthly.parquet"
     wrds_market_raw = raw_dir / "wrds" / "crsp_market_monthly.parquet"
     wrds_treasury_raw = raw_dir / "wrds" / "crsp_treasury_monthly.parquet"
 
-    _run_step(
-        "author data",
-        partial(ensure_author_data, normalized_dir, vintage=settings.end_date),
-    )
     if not fred_raw.exists():
         _run_step(
             "FRED data",
@@ -99,7 +96,24 @@ def bootstrap_real_data(settings: Settings, *, compile_report: bool = False) -> 
     if not shiller_raw.exists():
         _run_step("Shiller data", partial(pull_shiller_data, raw_dir / "shiller"))
     if not (wrds_market_raw.exists() and wrds_treasury_raw.exists()):
+        if not settings.wrds_username:
+            raise RuntimeError(
+                "WRDS_USERNAME is required for missing CRSP caches. Set it in .env "
+                "and keep the password in your PostgreSQL password file."
+            )
         _run_step("WRDS data", partial(_pull_wrds, settings, raw_dir))
+    return [raw_dir / relative for relative in CORE_RAW_FILES]
+
+
+def bootstrap_real_data(settings: Settings, *, compile_report: bool = False) -> None:
+    """Acquire real inputs, normalize, build, analyze, and optionally compile."""
+    acquire_core_data(settings)
+    raw_dir = settings.data_dir / "raw"
+    normalized_dir = settings.data_dir / "normalized"
+    _run_step(
+        "author data",
+        partial(ensure_author_data, normalized_dir, vintage=settings.end_date),
+    )
 
     _run_step(
         "source normalization",

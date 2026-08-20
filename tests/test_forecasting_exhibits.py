@@ -40,6 +40,7 @@ def test_table_iii_has_all_thirteen_rows():
     assert result["row"].drop_duplicates().tolist() == list(range(1, 14))
     assert len(TABLE_III_SPECS) == 13
     assert result.groupby("row")["observations"].first().gt(0).all()
+    assert result["hac_lags"].eq(1).all()
 
 
 def test_table_iii_lagged_return_is_current_return_at_t():
@@ -62,6 +63,14 @@ def test_table_iii_row_thirteen_uses_declared_later_start():
     assert predictors.index.min() == pd.Period("1953Q2")
 
 
+def test_table_iii_row_thirteen_has_181_historical_observations():
+    result = build_table_iii(forecasting_panel(periods=184))
+    row_13 = result[result["row"] == 13]
+
+    assert row_13["sample_start"].unique().tolist() == ["1953Q2"]
+    assert row_13["observations"].unique().tolist() == [181]
+
+
 def test_table_vi_has_all_48_specification_horizon_models():
     result = build_table_vi(forecasting_panel())
     models = result[["specification", "horizon"]].drop_duplicates()
@@ -74,4 +83,9 @@ def test_table_vi_has_all_48_specification_horizon_models():
 def test_table_vi_hac_bandwidth_covers_every_overlap():
     result = build_table_vi(forecasting_panel())
 
-    assert (result["hac_lags"] >= result["horizon"] - 1).all()
+    expected = result["horizon"].map(lambda horizon: max(1, horizon - 1))
+    pd.testing.assert_series_equal(
+        result["hac_lags"].reset_index(drop=True),
+        expected.reset_index(drop=True),
+        check_names=False,
+    )

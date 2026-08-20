@@ -6,7 +6,7 @@ extend-exclude = ["notebooks"]
 select = ["E4", "E7", "E9", "F", "I"]
 
 [lint.isort]
-known-first-party = ["cay_lab", "src"]
+known-first-party = ["src", "tests"]
 
 [format]
 quote-style = "double"
