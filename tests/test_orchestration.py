@@ -116,6 +116,7 @@ def test_doit_targets_have_one_owner_and_required_edges():
         target.endswith("test_main.pdf")
         for target in tasks["compile_report"]["targets"]
     )
+    assert tasks["compile_report"]["clean"] == [dodo._clean_generated]
 
     exhibit_dependencies = set(tasks["generate_exhibits"]["file_dep"])
     for path in (

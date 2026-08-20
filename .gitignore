@@ -1,13 +1,11 @@
 .env
-asset/
 _data/
 _output/
-cay_lab/output/
 reports/build/
 reports/tables/
 reports/figures/
 reports/paper/generated/
-__pycache__/
+*__pycache__*
 *.py[cod]
 .pytest_cache/
 .ruff_cache/

@@ -5,41 +5,103 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from shutil import rmtree
 
 import yaml
 
-from src.bootstrap_real_data import (
-    CORE_RAW_FILES,
-    acquire_core_data,
-    bootstrap_real_data,
-)
-from src.data.build_extension_s14 import build_s14_components
-from src.data.build_extension_sources import (
-    build_regional_proxy_dataset,
-    build_wealth_group_dataset,
-)
-from src.data.build_sources import normalize_pulled_sources
-from src.data.extension_acquisition import (
-    acquire_extension_sources,
-    extension_sources_current,
-)
-from src.data.import_local import import_local_source
-from src.data.pull_author_cay import ensure_author_data
 from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
-from src.extension.chartbook import build_chartbook, write_section9_manifest
-from src.extension.pipeline import (
-    PANEL_STEM as EXTENSION_PANEL_STEM,
-)
-from src.extension.pipeline import (
-    REGION_NORMALIZED_STEM,
-    build_extension_panel,
-    generate_combined_report,
-    generate_extension_exhibits,
-    import_region_data,
-)
-from src.pipeline import build_panel, generate_exhibits
-from src.reporting.latex import compile_latex_report
 from src.settings import load_settings
+
+CORE_RAW_FILES = (
+    Path("fred/fred_inputs.parquet"),
+    Path("bea/bea_components.parquet"),
+    Path("shiller/shiller_monthly.parquet"),
+    Path("wrds/crsp_market_monthly.parquet"),
+    Path("wrds/crsp_treasury_monthly.parquet"),
+)
+REGION_NORMALIZED_STEM = "region_proxy_normalised"
+EXTENSION_PANEL_STEM = "extension_panel"
+
+
+def acquire_core_data(*args, **kwargs):
+    from src.bootstrap_real_data import acquire_core_data as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def bootstrap_real_data(*args, **kwargs):
+    from src.bootstrap_real_data import bootstrap_real_data as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def ensure_author_data(*args, **kwargs):
+    from src.data.pull_author_cay import ensure_author_data as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def import_local_source(*args, **kwargs):
+    from src.data.import_local import import_local_source as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def normalize_pulled_sources(*args, **kwargs):
+    from src.data.build_sources import normalize_pulled_sources as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def build_panel(*args, **kwargs):
+    from src.pipeline import build_panel as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def generate_exhibits(*args, **kwargs):
+    from src.pipeline import generate_exhibits as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def compile_latex_report(*args, **kwargs):
+    from src.reporting.latex import compile_latex_report as implementation
+
+    return implementation(*args, **kwargs)
+
+
+def acquire_extension_sources(*args, **kwargs):
+    from src.data.extension_acquisition import (
+        acquire_extension_sources as implementation,
+    )
+
+    return implementation(*args, **kwargs)
+
+
+def extension_sources_current(*args, **kwargs):
+    from src.data.extension_acquisition import (
+        extension_sources_current as implementation,
+    )
+
+    return implementation(*args, **kwargs)
+
+
+def _extension_pipeline():
+    from src.extension.pipeline import (
+        build_extension_panel,
+        generate_combined_report,
+        generate_extension_exhibits,
+        import_region_data,
+    )
+
+    return (
+        build_extension_panel,
+        generate_combined_report,
+        generate_extension_exhibits,
+        import_region_data,
+    )
+
 
 SETTINGS = load_settings([])
 PANEL_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.parquet"
@@ -138,6 +200,40 @@ REPORT_SOURCES = (
     SETTINGS.reports_dir / "paper" / "references.bib",
     *sorted((SETTINGS.reports_dir / "paper" / "sections").glob("*.tex")),
 )
+
+
+def _clean_generated(dryrun: bool = False) -> None:
+    """Best-effort cleanup of ignored artifacts produced by root workflow tasks."""
+    project_root = SETTINGS.project_root.resolve()
+    generated_paths = (
+        SETTINGS.data_dir / "raw",
+        SETTINGS.data_dir / "normalized",
+        SETTINGS.data_dir / "processed",
+        SETTINGS.output_dir,
+        SETTINGS.reports_dir / "build",
+        SETTINGS.reports_dir / "tables",
+        SETTINGS.reports_dir / "figures",
+        SETTINGS.reports_dir / "paper" / "generated",
+        project_root / ".pytest_cache",
+        project_root / ".ruff_cache",
+        project_root / ".doit.db.db",
+        project_root / ".doit.db.dat",
+        project_root / ".doit.db.dir",
+    )
+    for path in generated_paths:
+        resolved = path.resolve()
+        if project_root not in (resolved, *resolved.parents):
+            print(f"Skipping external generated path: {resolved}")
+            continue
+        if not resolved.exists():
+            continue
+        print(f"Would remove: {resolved}" if dryrun else f"Removing: {resolved}")
+        if dryrun:
+            continue
+        if resolved.is_dir():
+            rmtree(resolved, ignore_errors=True)
+        else:
+            resolved.unlink(missing_ok=True)
 
 
 def _run_tests_action() -> None:
@@ -367,6 +463,7 @@ def task_compile_report():
             "extension_region_report",
             "extension_section9_chartbook",
         ],
+        "clean": [_clean_generated],
     }
 
 
@@ -417,6 +514,13 @@ def task_extension_acquire():
 
 
 def _prepare_extension_data() -> None:
+    from src.data.build_extension_s14 import build_s14_components
+    from src.data.build_extension_sources import (
+        build_regional_proxy_dataset,
+        build_wealth_group_dataset,
+    )
+
+    _, _, _, import_region_data = _extension_pipeline()
     allow_network = SETTINGS.extension_acquisition_mode == "latest"
     build_s14_components(SETTINGS.extension_raw_dir, SETTINGS.extension_normalized_dir)
     build_wealth_group_dataset(
@@ -455,6 +559,7 @@ def task_extension_prepare():
 
 
 def _analyze_extension_data() -> None:
+    build_extension_panel, _, generate_extension_exhibits, _ = _extension_pipeline()
     build_extension_panel(SETTINGS)
     generate_extension_exhibits(SETTINGS)
 
@@ -474,6 +579,7 @@ def task_extension_analyze():
 
 
 def _run_extension_generate_combined_report() -> None:
+    _, generate_combined_report, _, _ = _extension_pipeline()
     generate_combined_report(SETTINGS)
 
 
@@ -491,6 +597,8 @@ def task_extension_region_report():
 
 
 def _run_extension_section9_chartbook() -> None:
+    from src.extension.chartbook import build_chartbook, write_section9_manifest
+
     build_chartbook(
         cay_decomposition="house_wealth_groups",
         input_start="2023Q1",

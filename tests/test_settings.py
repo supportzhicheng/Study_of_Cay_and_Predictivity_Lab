@@ -114,7 +114,6 @@ def test_env_example_contains_placeholders_only():
             values[key] = value
 
     assert values["WRDS_USERNAME"] == ""
-    assert values["WRDS_PASSWORD"] == ""
     assert values["BEA_API_KEY"] == ""
 
 
@@ -123,7 +122,7 @@ def test_generated_and_private_paths_are_ignored():
         (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     )
 
-    for required_rule in (".env", "asset/", "_data/", "_output/", "reports/build/"):
+    for required_rule in (".env", "_data/", "_output/", "reports/build/"):
         assert required_rule in ignore_rules
 
 

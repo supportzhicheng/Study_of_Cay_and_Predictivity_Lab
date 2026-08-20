@@ -86,6 +86,14 @@ doit extension_analyze
 
 A second `doit compile_report` is expected to be a no-op.
 
+To remove generated data, report artifacts, workflow state, and local test
+caches while preserving `.env`, `_data/input`, and tracked sources:
+
+```bash
+doit clean --dry-run  # Preview its scope without deleting anything:
+doit clean
+```
+
 ## Data and Outputs
 
 All provider and generated datasets are ignored:
