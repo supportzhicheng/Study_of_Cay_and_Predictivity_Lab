@@ -1,0 +1,43 @@
+{
+  "template": "https://github.com/backofficedev/cookiecutter_chartbook",
+  "commit": "f8f49d3e511ea1e171ece090d82732cc338c1856",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "Study of Cay and Predictivity Lab",
+      "project_slug": "cay_lab",
+      "project_description": "Cay replication and extension analysis",
+      "author_name": "Iris Wang, Zhicheng Zhou",
+      "author_email": "your.email@example.com",
+      "python_version": "3.11",
+      "environment_manager": "conda",
+      "include_latex_reports": true,
+      "include_jupyter_notebooks": true,
+      "include_r_scripts": false,
+      "include_stata_scripts": false,
+      "include_chartbook": true,
+      "include_github_actions": false,
+      "include_fred": true,
+      "include_fed_yield_curve": true,
+      "include_ofr_api": false,
+      "include_bloomberg": false,
+      "include_crsp_stock": true,
+      "include_crsp_compustat": false,
+      "_copy_without_render": [
+        "*.bst",
+        "*.sty",
+        "*.eps",
+        "*.ipe",
+        "*.png",
+        "*.pdf",
+        "*.tex",
+        "*.bib",
+        ".github/workflows/*.yml",
+        ".claude/skills/*/*.md"
+      ],
+      "_template": "https://github.com/backofficedev/cookiecutter_chartbook",
+      "_commit": "f8f49d3e511ea1e171ece090d82732cc338c1856"
+    }
+  },
+  "directory": null
+}

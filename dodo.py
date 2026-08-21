@@ -9,28 +9,16 @@ from shutil import rmtree
 
 import yaml
 
+from src.data.acquire_core import CORE_RAW_FILES
 from src.data.source_registry import SOURCE_REGISTRY, required_panel_sources
 from src.settings import load_settings
 
-CORE_RAW_FILES = (
-    Path("fred/fred_inputs.parquet"),
-    Path("bea/bea_components.parquet"),
-    Path("shiller/shiller_monthly.parquet"),
-    Path("wrds/crsp_market_monthly.parquet"),
-    Path("wrds/crsp_treasury_monthly.parquet"),
-)
 REGION_NORMALIZED_STEM = "region_proxy_normalised"
 EXTENSION_PANEL_STEM = "extension_panel"
 
 
 def acquire_core_data(*args, **kwargs):
-    from src.bootstrap_real_data import acquire_core_data as implementation
-
-    return implementation(*args, **kwargs)
-
-
-def bootstrap_real_data(*args, **kwargs):
-    from src.bootstrap_real_data import bootstrap_real_data as implementation
+    from src.data.acquire_core import acquire_core_data as implementation
 
     return implementation(*args, **kwargs)
 
@@ -107,7 +95,6 @@ SETTINGS = load_settings([])
 PANEL_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.parquet"
 PANEL_METADATA_PATH = SETTINGS.data_dir / "processed" / "core_quarterly.metadata.json"
 MANIFEST_PATH = SETTINGS.reports_dir / "build" / "artifact_manifest.json"
-BOOTSTRAP_MARKER = SETTINGS.output_dir / "bootstrap_real_data.complete"
 CORE_ACQUIRE_MARKER = SETTINGS.output_dir / "core_acquire.complete"
 TARGETS_PATH = SETTINGS.project_root / "config" / "paper_targets.yml"
 EXTENSION_REGION_SOURCE_CSV = (
@@ -473,20 +460,6 @@ def task_run_tests():
     return {
         "actions": [_run_tests_action],
         "targets": [str(SETTINGS.output_dir / "pytest.xml")],
-    }
-
-
-def task_bootstrap_real_data():
-    """Run credentialed acquisition and complete analysis."""
-
-    def bootstrap_and_mark_complete():
-        bootstrap_real_data(SETTINGS)
-        BOOTSTRAP_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        BOOTSTRAP_MARKER.write_text(f"completed through {SETTINGS.end_date}\n")
-
-    return {
-        "actions": [bootstrap_and_mark_complete],
-        "targets": [str(BOOTSTRAP_MARKER)],
     }
 
 

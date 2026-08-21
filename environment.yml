@@ -28,6 +28,7 @@ dependencies:
   - wrds>=3.2
   - xlrd>=2.0
   - tectonic=0.17.0
+  - cruft
   - pip
   - pip:
-      - chartbook>=0.0.22
+      - chartbook

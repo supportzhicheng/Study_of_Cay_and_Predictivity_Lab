@@ -24,8 +24,8 @@ includes Tectonic for report compilation.
 
 ## Credentials and Source Bundles
 
-Set `WRDS_USERNAME` and optionally `WRDS_PASSWORD` in `.env`; a PostgreSQL
-password file may be used instead. Set `BEA_API_KEY` for BEA acquisition.
+Set `WRDS_USERNAME` for WRDS acquisition.
+Set `BEA_API_KEY` for BEA acquisition.
 Secrets and provider data are ignored by Git.
 
 Extension acquisition has two modes:
@@ -43,8 +43,7 @@ EXTENSION_INPUT_DIR=/absolute/path/to/pinned-source-bundle
 ```
 
 The required files, coverage, units, cache paths, and SHA-256 values are listed
-in `config/extension_sources.yml`. Exact Section 9 reproduction requires the
-pinned QQQ cache documented in `docs/BASELINE_BUNDLE_STATUS.md`.
+in `config/extension_sources.yml`.
 
 ## Workflow
 

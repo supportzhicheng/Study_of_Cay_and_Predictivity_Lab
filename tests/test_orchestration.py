@@ -70,7 +70,6 @@ def test_doit_lists_required_core_tasks():
         "run_notebook",
         "compile_report",
         "run_tests",
-        "bootstrap_real_data",
         "extension_acquire",
         "extension_prepare",
         "extension_analyze",
@@ -89,7 +88,6 @@ def test_doit_targets_have_one_owner_and_required_edges():
         "run_notebook": dodo.task_run_notebook(),
         "compile_report": dodo.task_compile_report(),
         "run_tests": dodo.task_run_tests(),
-        "bootstrap_real_data": dodo.task_bootstrap_real_data(),
     }
     owners: dict[str, str] = {}
     for task_name, task in tasks.items():
@@ -131,7 +129,6 @@ def test_doit_targets_have_one_owner_and_required_edges():
     report_dependencies = set(tasks["compile_report"]["file_dep"])
     assert {str(path) for path in dodo.REPORT_SOURCES} <= report_dependencies
     assert {str(path) for path in dodo.GENERATED_ARTIFACTS} <= report_dependencies
-    assert tasks["bootstrap_real_data"]["targets"] == [str(dodo.BOOTSTRAP_MARKER)]
 
 
 def test_core_acquire_uses_complete_local_bundle_without_live_pull(
