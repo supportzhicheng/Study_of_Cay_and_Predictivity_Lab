@@ -31,4 +31,4 @@ dependencies:
   - cruft
   - pip
   - pip:
-      - chartbook>=0.0.22
+      - chartbook
