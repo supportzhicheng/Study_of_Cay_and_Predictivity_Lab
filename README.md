@@ -24,8 +24,8 @@ includes Tectonic for report compilation.
 
 ## Credentials and Source Bundles
 
-Set `WRDS_USERNAME` and optionally `WRDS_PASSWORD` in `.env`; a PostgreSQL
-password file may be used instead. Set `BEA_API_KEY` for BEA acquisition.
+Set `WRDS_USERNAME` for WRDS acquisition.
+Set `BEA_API_KEY` for BEA acquisition.
 Secrets and provider data are ignored by Git.
 
 Extension acquisition has two modes:
@@ -134,7 +134,6 @@ ruff check .
 ruff format --check .
 git diff --check
 doit list
-doit compile_report
 doit compile_report
 ```
 

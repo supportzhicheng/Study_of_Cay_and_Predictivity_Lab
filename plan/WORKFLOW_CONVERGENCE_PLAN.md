@@ -73,7 +73,6 @@ Study_of_Cay_and_Predictivity_Lab/
 |-- src/
 |   |-- settings.py
 |   |-- pipeline.py
-|   |-- bootstrap_real_data.py
 |   |-- data/
 |   |   |-- core acquisition and normalization
 |   |   `-- extension acquisition and preparation
